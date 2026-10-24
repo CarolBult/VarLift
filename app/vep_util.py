@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import subprocess
 import json
+import os
 from pathlib import Path
 
 
@@ -113,10 +114,11 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
         output_file: str. Output file in processing dictionary. Defaults to 'output.json'
     '''
 
-    cmd = ['limactl', 'shell', 'apptainer', '--',
-           'apptainer', 'exec', 
-           '--bind', '/main:/main',
-           '/main/ensembl-vep.sif', 'vep',
+    host_main = os.path.expanduser('~/VarLift/app/vep')
+
+    cmd = ['apptainer', 'exec',
+           '--bind', f'{host_main}:/main',
+           f'{host_main}/ensembl-vep.sif', 'vep',
            '--dir_cache', '/main/vep_cache',
            '--input_file', f'/main/processing/{input_file}',
            '--output_file', f'/main/processing/{output_file}',
@@ -130,7 +132,6 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
            '--symbol',
            '--numbers',
            '--coding_only']
-
     
     if species == 'homo_sapiens':
         cmd += ['--polyphen', 'b',
@@ -238,6 +239,11 @@ def prepare_vep_output(vep_df):
 
 
     # # Fetch domain names
+    # Fetch Pfam domain names from InterPro (one API call per unique domain)
+    if 'Domain' in vep_df.columns:
+        unique_domains = [d for d in vep_df['Domain'].unique() if pd.notna(d)]
+        name_map = {d: get_domain_name(d) for d in unique_domains}
+        vep_df['domain_name'] = vep_df['Domain'].map(name_map)
     # for domain in vep_df['Domain'].unique():
     #     if domain == None:
     #         dom_name = None
@@ -247,17 +253,25 @@ def prepare_vep_output(vep_df):
 
     
     # Create protein DataFrame
-    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'Domain', 'polyphen_prediction', 
+#    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'Domain', 'polyphen_prediction', 
+#           'polyphen_score', 'consequence_terms', 'codons', 'amino_acids', 'refAA', 'protein_start', 'varAA']
+    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'Domain', 'domain_name', 'polyphen_prediction',
             'polyphen_score', 'consequence_terms', 'codons', 'amino_acids', 'refAA', 'protein_start', 'varAA']
     cols_present = [col for col in keep if col in vep_df.columns]
     protein_df = vep_df[cols_present].copy()
 
     # Update column names
-    protein_df.rename(columns={'transcript_id': 'Transcript ID', 'gene_symbol': 'Gene Symbol', 'biotype': 'Biotype', 
-                       'exon': 'Exon Rank', 'Domain': 'Pfam Domain ID', 
-                       'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score', 
-                       'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'}, 
+    protein_df.rename(columns={'transcript_id': 'Transcript ID', 'gene_symbol': 'Gene Symbol', 'biotype': 'Biotype',
+                       'exon': 'Exon Rank', 'Domain': 'Pfam Domain ID', 'domain_name': 'Pfam Domain Name',
+                       'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score',
+                       'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'},
                        inplace=True,  errors='ignore')
+
+#    protein_df.rename(columns={'transcript_id': 'Transcript ID', 'gene_symbol': 'Gene Symbol', 'biotype': 'Biotype', 
+#                       'exon': 'Exon Rank', 'Domain': 'Pfam Domain ID', 
+#                       'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score', 
+#                       'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'}, 
+#                       inplace=True,  errors='ignore')
     
     return protein_df
 

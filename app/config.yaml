@@ -6,6 +6,8 @@ api:
   ols_base_url: "https://www.ebi.ac.uk/ols4/api/"
 
 data:
+
+  mp_hp_mapping: "https://raw.githubusercontent.com/mapping-commons/mh_mapping_initiative/master/mappings/mp_hp_mgi_all.sssom.tsv"
   mondo_obo: "https://purl.obolibrary.org/obo/mondo.obo"
 
   mgi_alleles: "https://fms.alliancegenome.org/download/VARIANT-ALLELE_NCBITaxon10090.tsv.gz"
@@ -18,12 +20,15 @@ data:
 
   ncbi_var_summary: "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz"
 
-  ensemble_version: "115"
+  ensemble_version: "116"
   ensembl_hum_gff3: "https://ftp.ensembl.org/pub/release-{ensemble_version}/gff3/homo_sapiens/Homo_sapiens.GRCh38.{ensemble_version}.gff3.gz"
   ensembl_mus_gff3: "https://ftp.ensembl.org/pub/release-{ensemble_version}/gff3/mus_musculus/Mus_musculus.GRCm39.{ensemble_version}.gff3.gz"
 
 
 paths:
+
+  mp_hp_mapping: "app/data/MGI/mp_hp_mgi_all.sssom.tsv"
+
   amino_acids: "app/data/amino_acid_mapping.csv"
 
   clinvar_vcf: "app/data/NCBI/clinvar.grch38.vcf.gz"

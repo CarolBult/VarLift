@@ -204,3 +204,23 @@ def resolve_disease_tokens(tokens):
     # No valid MONDO mapping
     return None, None
 
+def extract_hp_ids(clinvar_results):
+    '''
+    Extract HP (Human Phenotype Ontology) IDs from the CLNDISDB field.
+
+    CLNDISDB entries look like:
+      [['MedGen:C...', 'OMIM:...', 'Human_Phenotype_Ontology:HP:0001234'], ...]
+
+    Adds a 'HP_IDs' column (list of 'HP:...' strings per variant).
+    '''
+    hp_col = []
+    for disease_list in clinvar_results['CLNDISDB'].values:
+        hp_ids = set()
+        if disease_list:
+            for disease_entry in disease_list:
+                for xref in disease_entry:
+                    if xref.startswith('Human_Phenotype_Ontology:HP:'):
+                        hp_ids.add(xref.split(':', 1)[1])  # keep "HP:0001234"
+        hp_col.append(sorted(hp_ids))
+    clinvar_results['HP_IDs'] = hp_col
+    return clinvar_results

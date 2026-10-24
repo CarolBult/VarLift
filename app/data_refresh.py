@@ -27,6 +27,21 @@ def refresh_mgi():
     download_file(config['data']['mgi_disease'], config['paths']['mgi_disease'])
     download_file(config['data']['mgi_phenotype'], config['paths']['mgi_phenotype'])
 
+def refresh_mp_hp_mapping():
+    '''
+    Downloads the Monarch mapping-commons MP↔HP SSSOM mapping file.
+    Used for mouse-to-human phenotype equivalency scoring.
+    '''
+    download_file(config['data']['mp_hp_mapping'], config['paths']['mp_hp_mapping'])
+
+
+def refresh_mp_hp_mapping():
+    '''
+    Downloads the Monarch mapping-commons MP↔HP SSSOM mapping file.
+    Used for mouse-to-human phenotype equivalency scoring.
+    '''
+    download_file(config['data']['mp_hp_mapping'], config['paths']['mp_hp_mapping'])
+
 
 def refresh_clinvar():
     '''
@@ -81,9 +96,11 @@ def refresh_data():
     '''
     refresh_mondo()
     refresh_mgi()
+    refresh_mp_hp_mapping()      # ← add this line
     refresh_clinvar()
     refresh_ensembl()
     refresh_ncbi()
+
 
 
 if __name__ == '__main__':

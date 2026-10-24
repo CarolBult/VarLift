@@ -3,7 +3,7 @@ from app.processing_util import prepare_submission, process_human_fetch
 from app.gene_util import fetch_gene_info, fetch_mus_alleles, fetch_homologous_gene, process_mus_alleles
 from app.vep_util import prepare_vep_output, run_vep
 from app.phenotype_util import allele_phenotype_match
-from app.disease_util import assign_clinvar, fetch_mus_doid, clndisdb_to_mondo, map_doids_to_mondo
+from app.disease_util import assign_clinvar, fetch_mus_doid, clndisdb_to_mondo, map_doids_to_mondo, extract_hp_ids
 
 import time
 import yaml
@@ -72,6 +72,7 @@ def hvar_query(variants, assembly='GRCh38'):
 
     # Disease Associations
     disease_df = assign_clinvar(variants)
+    disease_df = extract_hp_ids(disease_df)        # grab HP IDs before CLNDISDB is dropped
     disease_df = clndisdb_to_mondo(disease_df)
     protein_df = protein_df.merge(disease_df, on='Name', how='left')
 
@@ -226,8 +227,7 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
 
     return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df
 
-
-def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs):
+def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=None):
     '''
     Creates score DF for human and mouse results.
 
@@ -269,7 +269,7 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs):
     match_cols = ['Biotype Match', 'Consequence Match', 'AA Match', 'AA Position Match', 'Exon Match', 'Domain Match', 'Disease Match']
 
     # Calculate precentage of hits
-    score_df['Total Score'] = score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100
+    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
 
 
     score_df = score_df.where(pd.notnull(score_df), None)
@@ -277,10 +277,51 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs):
     e = time.time()
     print(f'Score Time: {e-s}')
 
+    # Calculate precentage of hits
+    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
+
+    # Phenotype equivalency score: mouse MP terms vs. human ClinVar HP terms
+    from app.phenotype_similarity import phenotype_similarity_detailed
+
+    if mouse_phenotype_df is not None and not mouse_phenotype_df.empty and 'HP_IDs' in hum_prt_df.columns:
+        # AlleleID -> set of MP IDs (strip ",label" suffix from each entry)
+        allele_to_mp = {}
+        for aid, phenos in mouse_phenotype_df[['AlleleID', 'Phenotypes']].itertuples(index=False):
+            if isinstance(phenos, list):
+                mps = [p.split(',')[0] for p in phenos if isinstance(p, str) and p.startswith('MP:')]
+                allele_to_mp.setdefault(aid, set()).update(mps)
+
+        # Input Name -> set of HP IDs (one per input variant)
+        name_to_hp = {}
+        for name, hps in hum_prt_df[['Name', 'HP_IDs']].drop_duplicates(subset=['Name']).itertuples(index=False):
+            name_to_hp[name] = set(hps) if isinstance(hps, list) else set()
+
+        def _score_row(r):
+            d = phenotype_similarity_detailed(
+                allele_to_mp.get(r['AlleleID'], set()),
+                name_to_hp.get(r['Input Name'], set()),
+            )
+            return pd.Series(
+                [d['score'], d['mapped_mp_count'], d['total_mp_count']],
+                index=['Phenotype Score', 'MP Terms Mapped', 'MP Terms Total'],
+            )
+
+        score_df[['Phenotype Score', 'MP Terms Mapped', 'MP Terms Total']] = (
+            score_df.apply(_score_row, axis=1)
+        )
+    else:
+        score_df['Phenotype Score'] = None
+        score_df['MP Terms Mapped'] = None
+        score_df['MP Terms Total'] = None
+     
+    score_df = score_df.astype(object).where(pd.notnull(score_df), None)
+
+    e = time.time()
+    print(f'Score Time: {e-s}')
+
     score_df.to_csv('app/results/score_df.csv', index=False)
 
     return score_df
-
 
 # ---- MOUSE QUERY ----
 def mvar_query(variants, assembly='GRCm39'):
@@ -448,10 +489,10 @@ def mvar_query_score(mouse_prt_df, hum_prt_df, gene_inputs):
     match_cols = ['Biotype Match', 'Consequence Match', 'AA Match', 'AA Position Match', 'Exon Match', 'Domain Match']
 
     # Calculate precentage of hits
-    score_df['Total Score'] = score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100
+    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
 
 
-    score_df = score_df.where(pd.notnull(score_df), None)
+    score_df = score_df.astype(object).where(pd.notnull(score_df), None)
 
     e = time.time()
     print(f'Score Time: {e-s}')

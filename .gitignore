@@ -9,3 +9,24 @@ app/results/
 app/testing_results/
 app/testing/
 app/vep/
+# Downloaded data files (regenerate via data_refresh.py)
+app/data/Ensembl/*.parquet
+app/data/Ensembl/*.gff3.gz
+app/data/MGI/*.rpt
+app/data/MGI/VARIANT-ALLELE*.tsv.gz
+app/data/MONDO/*.json
+app/data/MONDO/*.obo
+app/data/NCBI/*.vcf.gz*
+app/data/NCBI/*.tsv*
+
+# Logs and local artifacts
+app/mapping.log
+*.save
+*.swp
+__pycache__/
+
+# Local environment file (regenerate from environment.yml with sed strip)
+environment-linux.yml
+
+# Results written at query time
+app/results/
