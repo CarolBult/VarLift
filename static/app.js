@@ -21,6 +21,31 @@ document.getElementById('runButton').addEventListener('click', function () {
 });
 
 
+
+function groupedScoreSort(scores) {
+    // Each allele's best transcript score decides where the group lands;
+    // within an allele, transcripts sort by their own Total Score.
+    const bestByAllele = {};
+    scores.forEach(row => {
+        const aid = row['AlleleID'];
+        const s = row['Total Score'] ?? 0;
+        if (bestByAllele[aid] === undefined || s > bestByAllele[aid]) {
+            bestByAllele[aid] = s;
+        }
+    });
+
+    return [...scores].sort((a, b) => {
+        const aBest = bestByAllele[a['AlleleID']] ?? 0;
+        const bBest = bestByAllele[b['AlleleID']] ?? 0;
+        if (bBest !== aBest) return bBest - aBest;              // allele groups by best score
+        if (a['AlleleID'] !== b['AlleleID']) {
+            return String(a['AlleleID']).localeCompare(b['AlleleID']);  // stable tiebreak between alleles
+        }
+        return (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0);  // within an allele
+    });
+}
+
+
 // Build the sidebar with one button per input variant
 function buildSidebar(data) {
     const sidebar = document.getElementById('sidebar');
@@ -90,7 +115,8 @@ function renderTables(name, gene) {
         phenotypes = window.fullJSON.phenotypes.filter(row => row['Gene Symbol'] === homolog);
 
         // Sort output proteins and score dataframes
-        sortedScores = [...scores].sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
+   //     sortedScores = [...scores].sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
+        sortedScores = groupedScoreSort(scores);
         const rank = new Map(sortedScores.map((row, index) => [`${row['AlleleID']}||${row['Transcript ID']}`, index]));
 
         console.log(rank)
@@ -116,7 +142,8 @@ function renderTables(name, gene) {
         phenotypes = window.fullJSON.phenotypes.filter(row => outputProteins.some(r => r.Name === row.Name));
 
         // Sort output proteins and score dataframes
-        sortedScores = [...scores].sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
+ //       sortedScores = [...scores].sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
+        sortedScores = groupedScoreSort(scores);
         const rank = new Map(sortedScores.map((row, index) => [`${row['Name']}||${row['Transcript ID']}`, index]));
 
         console.log(rank)
