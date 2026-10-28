@@ -71,7 +71,7 @@ def hvar_query(variants, assembly='GRCh38'):
 
 
     # Disease Associations
-    from app.clinvar_summary import lookup_hp_ids
+    from app.clinvar_summary import lookup_hp_ids, lookup_disease_ids
     from app.hpoa import lookup_hps_for_mondo, lookup_hps_for_gene
 
     disease_df = assign_clinvar(variants)
@@ -88,17 +88,68 @@ def hvar_query(variants, assembly='GRCh38'):
         if hps:
             coord_to_vs_hp[v['Name']] = hps
 
+    # Pre-fetch disease IDs from variant_summary.tsv for each input variant
+    coord_to_vs_diseases = {}
+    for _, v in variants.iterrows():
+        dids = lookup_disease_ids(v['Chromosome'], v['Start'])
+        if dids:
+            coord_to_vs_diseases[v['Name']] = dids
+
+    # Backfill Associated Diseases and MONDO from variant_summary.tsv when
+    # ClinVar's VCF (CLNDISDB) didn't yield any disease associations. Many
+    # protein-level ClinVar records are absent from the VCF but still carry
+    # disease cross-references in variant_summary.tsv.
+    from app.hpoa import lookup_name_for_disease
+
+    name_to_diseases = {}
+    for _, v in variants.iterrows():
+        dids = lookup_disease_ids(v['Chromosome'], v['Start'])
+        if dids:
+            name_to_diseases[v['Name']] = dids
+
+    def _backfill(row):
+        if row.get('MONDO') and len(row['MONDO']) > 0:
+            return row  # CLNDISDB already provided; keep it
+        dids = name_to_diseases.get(row['Name'], [])
+        if not dids:
+            return row
+        mondos = sorted({d for d in dids if d.startswith('MONDO:')})
+        # Build names: prefer MONDO names via OMIM/Orphanet from hpoa
+        names = []
+        seen_names = set()
+        for d in dids:
+            n = lookup_name_for_disease(d)
+            if n and n not in seen_names:
+                names.append(n)
+                seen_names.add(n)
+        row['MONDO'] = mondos
+        row['Associated Diseases'] = names
+        return row
+
+    disease_df = disease_df.apply(_backfill, axis=1)
+
+
+
+
     def _build_variant_hps(row):
         hps = set()
+        # 1. Direct HP cross-refs embedded in CLNDISDB (via extract_hp_ids)
         clndisdb = row.get('HP_IDs', [])
         if isinstance(clndisdb, list):
             hps.update(clndisdb)
-        vs = coord_to_vs_hp.get(row['Name'], [])
-        hps.update(vs)
+        # 2. Direct HPs from variant_summary.tsv
+        hps.update(coord_to_vs_hp.get(row['Name'], []))
+        # 3. HPs chained via MONDO disease IDs (from ClinVar's CLNDISDB)
         mondos = row.get('MONDO', [])
         if isinstance(mondos, list):
             for mondo in mondos:
                 hps.update(lookup_hps_for_mondo(mondo))
+        # 4. HPs chained via MONDO disease IDs (from variant_summary.tsv)
+        for did in coord_to_vs_diseases.get(row['Name'], []):
+            if did.startswith('MONDO:'):
+                hps.update(lookup_hps_for_mondo(did))
+            # OMIM and Orphanet feed hpoa directly, bypassing MONDO xref
+            # (we'd need a parallel lookup in hpoa.py — do that if needed)
         return sorted(hps)
 
     disease_df['HP_IDs_variant'] = disease_df.apply(_build_variant_hps, axis=1)

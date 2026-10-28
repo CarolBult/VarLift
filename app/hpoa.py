@@ -21,8 +21,8 @@ with open('app/config.yaml') as f:
 # Lazy singletons
 _DISEASE_TO_HP = None       # {OMIM:/ORPHA:/DECIPHER: id -> set of HP:... strings}
 _GENE_TO_HP = None          # {gene_symbol -> set of HP:... strings}
+_DISEASE_NAMES = None     # {OMIM:/ORPHA:/DECIPHER: id -> disease name string}
 _MONDO_TO_XREFS = None      # {MONDO:id -> set of other disease IDs}
-
 
 def _build_mondo_xrefs():
     '''Invert mondo_xref_map (xref -> MONDO) into MONDO -> set of xrefs.'''
@@ -33,7 +33,6 @@ def _build_mondo_xrefs():
         inv[mondo].add(xref_id)
     logging.info(f'MONDO->xref index: {len(inv)} MONDO IDs')
     return dict(inv)
-
 
 def _build_disease_to_hp():
     '''Load phenotype.hpoa into a {disease_id: set(HP:...)} map.'''
@@ -106,3 +105,22 @@ def lookup_hps_for_gene(gene_symbol):
     if _GENE_TO_HP is None:
         _GENE_TO_HP = _build_gene_to_hp()
     return sorted(_GENE_TO_HP.get(gene_symbol, set()))
+
+def _build_disease_names():
+    '''Load phenotype.hpoa and build {disease_id: disease_name}.'''
+    path = _config['paths']['hpoa']
+    df = pd.read_csv(path, sep='\t', comment='#', dtype=str,
+                     usecols=['database_id', 'disease_name'])
+    df = df.dropna(subset=['database_id', 'disease_name']).drop_duplicates(subset=['database_id'])
+    return dict(zip(df['database_id'], df['disease_name']))
+
+def lookup_name_for_disease(disease_id):
+    '''
+    Return the human-readable name for a disease ID (OMIM/ORPHA/DECIPHER)
+    from phenotype.hpoa. Returns None if the ID isn't found.
+    Accepts 'Orphanet:778' and normalizes to 'ORPHA:778' before lookup.
+    '''
+    global _DISEASE_NAMES
+    if _DISEASE_NAMES is None:
+        _DISEASE_NAMES = _build_disease_names()
+    return _DISEASE_NAMES.get(_normalize_disease_id(disease_id))
