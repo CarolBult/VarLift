@@ -71,14 +71,32 @@ def hvar_query(variants, assembly='GRCh38'):
 
 
     # Disease Associations
+
+    # Disease Associations
+    from app.clinvar_summary import lookup_hp_ids
+
     disease_df = assign_clinvar(variants)
-    disease_df = extract_hp_ids(disease_df)        # grab HP IDs before CLNDISDB is dropped
+    disease_df = extract_hp_ids(disease_df)        # fallback source: CLNDISDB-based HP IDs
+
+    # Richer HP terms from variant_summary.tsv, keyed by (chrom, start).
+    # Prefer this source when available; fall back to the CLNDISDB IDs otherwise.
+    coord_to_hp = {}
+    for _, v in variants.iterrows():
+        hps_rich = lookup_hp_ids(v['Chromosome'], v['Start'])
+        if hps_rich:
+            coord_to_hp[v['Name']] = hps_rich
+
+    def _pick_hps(row):
+        name = row['Name']
+        if name in coord_to_hp:
+            return coord_to_hp[name]
+        existing = row.get('HP_IDs', [])
+        return existing if isinstance(existing, list) else []
+
+    disease_df['HP_IDs'] = disease_df.apply(_pick_hps, axis=1)
+
     disease_df = clndisdb_to_mondo(disease_df)
     protein_df = protein_df.merge(disease_df, on='Name', how='left')
-
-    gene_df = gene_df.where(pd.notnull(gene_df), None)
-    protein_df = protein_df.where(pd.notnull(protein_df), None)
-
     # Save results
     Path("app/results").mkdir(parents=True, exist_ok=True)
     gene_df.to_csv('app/results/hum_gene_df.csv', index=False)
@@ -313,9 +331,13 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
         score_df['Phenotype Score'] = None
         score_df['MP Terms Mapped'] = None
         score_df['MP Terms Total'] = None
-     
-    score_df = score_df.astype(object).where(pd.notnull(score_df), None)
 
+    # Belt-and-suspenders NaN handling: new columns from .apply() can get
+    # promoted to float64 with NaN which doesn't JSON-serialize cleanly.
+    for col in ['Phenotype Score', 'MP Terms Mapped', 'MP Terms Total']:
+        if col in score_df.columns:
+            score_df[col] = score_df[col].astype(object).where(score_df[col].notna(), None)
+    score_df = score_df.astype(object).where(pd.notnull(score_df), None)
     e = time.time()
     print(f'Score Time: {e-s}')
 

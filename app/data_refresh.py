@@ -96,7 +96,7 @@ def refresh_data():
     '''
     refresh_mondo()
     refresh_mgi()
-    refresh_mp_hp_mapping()      # ← add this line
+    refresh_mp_hp_mapping()
     refresh_clinvar()
     refresh_ensembl()
     refresh_ncbi()

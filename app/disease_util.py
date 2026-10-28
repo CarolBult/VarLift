@@ -154,19 +154,19 @@ def clndisdb_to_mondo(clinvar_results):
         mondos = []
         terms = []
 
-        # Iterate diseases
-        for disease_tokens in disease_list:
+        # Variants not in ClinVar come through as None; preserve column alignment
+        if disease_list:
+            for disease_tokens in disease_list:
 
-            # Extract MONDO and term
-            mondo, term = resolve_disease_tokens(disease_tokens)
+                # Extract MONDO and term
+                mondo, term = resolve_disease_tokens(disease_tokens)
 
-            if mondo:
-                mondos.append(mondo)
-                terms.append(term)
+                if mondo:
+                    mondos.append(mondo)
+                    terms.append(term)
 
         mondos_col.append(mondos)
         terms_col.append(terms)
-
     # Assign results to HGVS DataFrame
     clinvar_results['Associated Diseases'] = terms_col
     clinvar_results['MONDO'] = mondos_col

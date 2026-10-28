@@ -74,7 +74,20 @@ def run_variants(data: VariantInput):
             'scores': score_df.to_dict(orient='records'),
             'phenotypes': output_phenotype_df.to_dict(orient='records'),
             'gene_mapping': input_genes.to_dict(orient='records')}
-    
+
     safe_result = jsonable_encoder(results)
 
+    import math
+    def _scrub(x):
+        if isinstance(x, float) and math.isnan(x):
+            return None
+        if isinstance(x, list):
+            return [_scrub(v) for v in x]
+        if isinstance(x, dict):
+            return {k: _scrub(v) for k, v in x.items()}
+        return x
+
+    safe_result = _scrub(safe_result)
+
     return JSONResponse(content=safe_result)
+
