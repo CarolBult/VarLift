@@ -30,3 +30,5 @@ environment-linux.yml
 
 # Results written at query time
 app/results/
+app/data/HPO/*.hpoa
+app/data/HPO/*.txt
