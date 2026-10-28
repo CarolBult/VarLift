@@ -10,6 +10,9 @@ data:
   mp_hp_mapping: "https://raw.githubusercontent.com/mapping-commons/mh_mapping_initiative/master/mappings/mp_hp_mgi_all.sssom.tsv"
   mondo_obo: "https://purl.obolibrary.org/obo/mondo.obo"
 
+  hpoa: "https://purl.obolibrary.org/obo/hp/hpoa/phenotype.hpoa"
+  genes_to_phenotype: "https://purl.obolibrary.org/obo/hp/hpoa/genes_to_phenotype.txt"
+
   mgi_alleles: "https://fms.alliancegenome.org/download/VARIANT-ALLELE_NCBITaxon10090.tsv.gz"
   mgi_homology: "https://www.informatics.jax.org/downloads/reports/HOM_ProteinCoding.rpt"
   mgi_disease: "https://www.informatics.jax.org/downloads/reports/MGI_DiseaseMouseModel.rpt"
@@ -45,6 +48,9 @@ paths:
   mondo_obo: "app/data/MONDO/mondo.obo"
   mondo_xref_map: "app/data/MONDO/mondo_xref_map.json"
   mondo_term_map: "app/data/MONDO/mondo_term_map.json"
+
+  hpoa: "app/data/HPO/phenotype.hpoa"
+  genes_to_phenotype: "app/data/HPO/genes_to_phenotype.txt"
 
   ensembl_hum_gff3: "app/data/Ensembl/Homo_sapiens.GRCh38.{ensemble_version}.gff3.gz"
   ensembl_mus_gff3: "app/data/Ensembl/Mus_musculus.GRCm39.{ensemble_version}.gff3.gz"

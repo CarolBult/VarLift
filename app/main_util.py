@@ -71,32 +71,45 @@ def hvar_query(variants, assembly='GRCh38'):
 
 
     # Disease Associations
-
-    # Disease Associations
     from app.clinvar_summary import lookup_hp_ids
+    from app.hpoa import lookup_hps_for_mondo, lookup_hps_for_gene
 
     disease_df = assign_clinvar(variants)
-    disease_df = extract_hp_ids(disease_df)        # fallback source: CLNDISDB-based HP IDs
+    disease_df = extract_hp_ids(disease_df)        # HP IDs embedded directly in CLNDISDB
+    disease_df = clndisdb_to_mondo(disease_df)     # resolves MONDO list per variant
 
-    # Richer HP terms from variant_summary.tsv, keyed by (chrom, start).
-    # Prefer this source when available; fall back to the CLNDISDB IDs otherwise.
-    coord_to_hp = {}
+    # Variant-level HP terms: union of
+    #   - direct HP cross-refs in CLNDISDB (extract_hp_ids result)
+    #   - HPs from variant_summary.tsv's PhenotypeIDS column (richer, by chrom/pos)
+    #   - HPs looked up by MONDO disease via phenotype.hpoa
+    coord_to_vs_hp = {}
     for _, v in variants.iterrows():
-        hps_rich = lookup_hp_ids(v['Chromosome'], v['Start'])
-        if hps_rich:
-            coord_to_hp[v['Name']] = hps_rich
+        hps = lookup_hp_ids(v['Chromosome'], v['Start'])
+        if hps:
+            coord_to_vs_hp[v['Name']] = hps
 
-    def _pick_hps(row):
-        name = row['Name']
-        if name in coord_to_hp:
-            return coord_to_hp[name]
-        existing = row.get('HP_IDs', [])
-        return existing if isinstance(existing, list) else []
+    def _build_variant_hps(row):
+        hps = set()
+        clndisdb = row.get('HP_IDs', [])
+        if isinstance(clndisdb, list):
+            hps.update(clndisdb)
+        vs = coord_to_vs_hp.get(row['Name'], [])
+        hps.update(vs)
+        mondos = row.get('MONDO', [])
+        if isinstance(mondos, list):
+            for mondo in mondos:
+                hps.update(lookup_hps_for_mondo(mondo))
+        return sorted(hps)
 
-    disease_df['HP_IDs'] = disease_df.apply(_pick_hps, axis=1)
+    disease_df['HP_IDs_variant'] = disease_df.apply(_build_variant_hps, axis=1)
+    disease_df = disease_df.drop(columns=['HP_IDs'])
 
-    disease_df = clndisdb_to_mondo(disease_df)
     protein_df = protein_df.merge(disease_df, on='Name', how='left')
+
+    # Gene-level HP terms: looked up once per unique gene symbol in protein_df
+    gene_to_hp = {g: lookup_hps_for_gene(g) for g in protein_df['Gene Symbol'].dropna().unique()}
+    protein_df['HP_IDs_gene'] = protein_df['Gene Symbol'].map(gene_to_hp)
+
     # Save results
     Path("app/results").mkdir(parents=True, exist_ok=True)
     gene_df.to_csv('app/results/hum_gene_df.csv', index=False)
@@ -220,7 +233,6 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
     mouse_prt_df = mouse_prt_df[['Submission', 'Gene Symbol', 'AlleleID', 'AlleleSymbol', 'Transcript ID', 'Biotype', 
                                  'Exon Rank', 'Pfam Domain ID', 'Molecular Consequence', 
                                  'Codon Switch', 'Amino Acids', 'refAA', 'varAA', 'Associated Diseases', 'MONDO']]
-    
 
 
     # Replace all null with None
@@ -298,43 +310,62 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     # Calculate precentage of hits
     score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
 
-    # Phenotype equivalency score: mouse MP terms vs. human ClinVar HP terms
-    from app.phenotype_similarity import phenotype_similarity_detailed
+    # Phenotype equivalency scores: compare each mouse allele's MP phenotypes
+    # (translated to HP via SSSOM) against two human HP sets per input variant:
+    #   - variant-level: ClinVar/variant_summary HPs + phenotype.hpoa HPs for the MONDO disease
+    #   - gene-level: HPO's genes_to_phenotype.txt
+    from app.phenotype_similarity import phenotype_similarity_detailed, phenotype_coverage_detailed
 
-    if mouse_phenotype_df is not None and not mouse_phenotype_df.empty and 'HP_IDs' in hum_prt_df.columns:
-        # AlleleID -> set of MP IDs (strip ",label" suffix from each entry)
+    cols = ['Phenotype Score (variant)', 'Phenotype Score (gene)',
+            'MP Terms Mapped', 'MP Terms Total']
+
+    have_mouse = mouse_phenotype_df is not None and not mouse_phenotype_df.empty
+    have_hp_variant = 'HP_IDs_variant' in hum_prt_df.columns
+    have_hp_gene = 'HP_IDs_gene' in hum_prt_df.columns
+
+    if have_mouse and (have_hp_variant or have_hp_gene):
+        # AlleleID -> set of MP IDs (strip ",label" suffix)
         allele_to_mp = {}
         for aid, phenos in mouse_phenotype_df[['AlleleID', 'Phenotypes']].itertuples(index=False):
             if isinstance(phenos, list):
                 mps = [p.split(',')[0] for p in phenos if isinstance(p, str) and p.startswith('MP:')]
                 allele_to_mp.setdefault(aid, set()).update(mps)
 
-        # Input Name -> set of HP IDs (one per input variant)
-        name_to_hp = {}
-        for name, hps in hum_prt_df[['Name', 'HP_IDs']].drop_duplicates(subset=['Name']).itertuples(index=False):
-            name_to_hp[name] = set(hps) if isinstance(hps, list) else set()
+        # Input Name -> variant HP set
+        name_to_hp_variant = {}
+        if have_hp_variant:
+            for name, hps in hum_prt_df[['Name', 'HP_IDs_variant']].drop_duplicates(subset=['Name']).itertuples(index=False):
+                name_to_hp_variant[name] = set(hps) if isinstance(hps, list) else set()
+
+        # Input Name -> gene HP set (same across all transcripts of the same input variant)
+        name_to_hp_gene = {}
+        if have_hp_gene:
+            for name, hps in hum_prt_df[['Name', 'HP_IDs_gene']].drop_duplicates(subset=['Name']).itertuples(index=False):
+                name_to_hp_gene[name] = set(hps) if isinstance(hps, list) else set()
 
         def _score_row(r):
-            d = phenotype_similarity_detailed(
-                allele_to_mp.get(r['AlleleID'], set()),
-                name_to_hp.get(r['Input Name'], set()),
-            )
+            mp_terms = allele_to_mp.get(r['AlleleID'], set())
+            variant_hps = name_to_hp_variant.get(r['Input Name'], set())
+            gene_hps = name_to_hp_gene.get(r['Input Name'], set())
+
+            d_variant = phenotype_similarity_detailed(mp_terms, variant_hps)
+            d_gene = phenotype_coverage_detailed(mp_terms, gene_hps)
+
             return pd.Series(
-                [d['score'], d['mapped_mp_count'], d['total_mp_count']],
-                index=['Phenotype Score', 'MP Terms Mapped', 'MP Terms Total'],
+                [d_variant['score'], d_gene['score'],
+                 d_variant['mapped_mp_count'], d_variant['total_mp_count']],
+                index=cols,
             )
 
-        score_df[['Phenotype Score', 'MP Terms Mapped', 'MP Terms Total']] = (
-            score_df.apply(_score_row, axis=1)
-        )
+        score_df[cols] = score_df.apply(_score_row, axis=1)
     else:
-        score_df['Phenotype Score'] = None
-        score_df['MP Terms Mapped'] = None
-        score_df['MP Terms Total'] = None
+        for c in cols:
+            score_df[c] = None
 
     # Belt-and-suspenders NaN handling: new columns from .apply() can get
     # promoted to float64 with NaN which doesn't JSON-serialize cleanly.
-    for col in ['Phenotype Score', 'MP Terms Mapped', 'MP Terms Total']:
+    for col in ['Phenotype Score (variant)', 'Phenotype Score (gene)',
+                'MP Terms Mapped', 'MP Terms Total']:
         if col in score_df.columns:
             score_df[col] = score_df[col].astype(object).where(score_df[col].notna(), None)
     score_df = score_df.astype(object).where(pd.notnull(score_df), None)

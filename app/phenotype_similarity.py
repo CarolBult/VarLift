@@ -99,3 +99,35 @@ def phenotype_similarity_detailed(mouse_mp_terms, human_hp_terms):
 
     score = phenotype_similarity(mouse_mp_terms, human_hp_terms)
     return {'score': score, 'mapped_mp_count': mapped, 'total_mp_count': total}
+
+
+
+def phenotype_coverage_detailed(mouse_mp_terms, reference_hp_terms):
+    '''
+    Asymmetric phenotype score: what fraction of the mouse allele's translated HPs
+    appear in the reference HP set.
+
+    Returns a dict:
+      - 'score': float 0.0-1.0 or None. |mouse_HP ∩ reference_HP| / |mouse_HP|
+      - 'mapped_mp_count': int, how many of the mouse MP terms are in the SSSOM map
+      - 'total_mp_count': int, total MP terms attached to the allele
+
+    Unlike Jaccard (symmetric), this metric does not penalize the reference set
+    for being large and comprehensive — which is the right choice when the
+    reference is a gene's full phenotype landscape and the mouse is one specific
+    allele's observed phenotypes.
+    '''
+    mouse_mp_terms = list(mouse_mp_terms or [])
+    total = len(mouse_mp_terms)
+    mapped = sum(1 for mp in mouse_mp_terms if mp in MP_TO_HP)
+
+    mouse_hp_weights = mp_to_weighted_hp(mouse_mp_terms)
+    reference_hp = set(reference_hp_terms or [])
+
+    if not mouse_hp_weights or not reference_hp:
+        return {'score': None, 'mapped_mp_count': mapped, 'total_mp_count': total}
+
+    intersection_weight = sum(w for hp, w in mouse_hp_weights.items() if hp in reference_hp)
+    mouse_total_weight = sum(mouse_hp_weights.values())
+    score = round(intersection_weight / mouse_total_weight, 3) if mouse_total_weight > 0 else None
+    return {'score': score, 'mapped_mp_count': mapped, 'total_mp_count': total}

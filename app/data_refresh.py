@@ -34,13 +34,14 @@ def refresh_mp_hp_mapping():
     '''
     download_file(config['data']['mp_hp_mapping'], config['paths']['mp_hp_mapping'])
 
-
-def refresh_mp_hp_mapping():
+def refresh_hpoa():
     '''
-    Downloads the Monarch mapping-commons MP↔HP SSSOM mapping file.
-    Used for mouse-to-human phenotype equivalency scoring.
+    Downloads HPO annotation files:
+    - phenotype.hpoa: disease -> HP term annotations (used for variant-level HP lookup via MONDO chaining)
+    - genes_to_phenotype.txt: gene -> HP term annotations (used for gene-level HP lookup)
     '''
-    download_file(config['data']['mp_hp_mapping'], config['paths']['mp_hp_mapping'])
+    download_file(config['data']['hpoa'], config['paths']['hpoa'])
+    download_file(config['data']['genes_to_phenotype'], config['paths']['genes_to_phenotype'])
 
 
 def refresh_clinvar():
@@ -88,7 +89,6 @@ def refresh_ncbi():
     output_path = config['paths']['ncbi_var_summary_grch38']
 
     parse_ncbi_variant_summary(input_path, output_path)
-    
 
 def refresh_data():
     '''
@@ -97,10 +97,10 @@ def refresh_data():
     refresh_mondo()
     refresh_mgi()
     refresh_mp_hp_mapping()
+    refresh_hpoa()
     refresh_clinvar()
     refresh_ensembl()
     refresh_ncbi()
-
 
 
 if __name__ == '__main__':
