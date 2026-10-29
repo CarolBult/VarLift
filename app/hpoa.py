@@ -124,3 +124,26 @@ def lookup_name_for_disease(disease_id):
     if _DISEASE_NAMES is None:
         _DISEASE_NAMES = _build_disease_names()
     return _DISEASE_NAMES.get(_normalize_disease_id(disease_id))
+
+
+def lookup_name_for_mondo(mondo_id):
+    '''
+    Return a human-readable disease name for a MONDO ID by walking
+    its xref list and asking phenotype.hpoa for the name under OMIM
+    (preferred) or Orphanet (fallback).
+
+    Returns None if no name is available.
+    '''
+    global _MONDO_TO_XREFS
+    if _MONDO_TO_XREFS is None:
+        _MONDO_TO_XREFS = _build_mondo_xrefs()
+
+    xrefs = _MONDO_TO_XREFS.get(mondo_id, set())
+    omim = sorted(x for x in xrefs if x.startswith('OMIM:'))
+    orph = sorted(x for x in xrefs if x.startswith('Orphanet:'))
+
+    for xref in omim + orph:
+        name = lookup_name_for_disease(xref)
+        if name:
+            return name
+    return None

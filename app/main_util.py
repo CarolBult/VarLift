@@ -361,20 +361,25 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     # Calculate precentage of hits
     score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
 
-    # Phenotype equivalency scores: compare each mouse allele's MP phenotypes
-    # (translated to HP via SSSOM) against two human HP sets per input variant:
-    #   - variant-level: ClinVar/variant_summary HPs + phenotype.hpoa HPs for the MONDO disease
-    #   - gene-level: HPO's genes_to_phenotype.txt
+    # Phenotype equivalency scoring (two tracks):
+    # - Variant score: asymmetric coverage of the mouse allele's translated
+    #   HPs against each disease the input variant is associated with. We
+    #   report the top-scoring disease(s) and the shared top score — so a
+    #   researcher sees which disease the match is for, not an aggregate
+    #   across diseases.
+    # - Gene score: asymmetric coverage against the gene's full HP landscape
+    #   (independent of disease choice).
     from app.phenotype_similarity import phenotype_coverage_detailed
+    from app.hpoa import lookup_hps_for_mondo, lookup_name_for_mondo
 
-    cols = ['Phenotype Score (variant)', 'Phenotype Score (gene)',
-            'MP Terms Mapped', 'MP Terms Total']
+    cols = ['Matched Disease(s)', 'Phenotype Score (variant)',
+            'Phenotype Score (gene)', 'MP Terms Mapped', 'MP Terms Total']
 
     have_mouse = mouse_phenotype_df is not None and not mouse_phenotype_df.empty
-    have_hp_variant = 'HP_IDs_variant' in hum_prt_df.columns
+    have_mondo = 'MONDO' in hum_prt_df.columns
     have_hp_gene = 'HP_IDs_gene' in hum_prt_df.columns
 
-    if have_mouse and (have_hp_variant or have_hp_gene):
+    if have_mouse and (have_mondo or have_hp_gene):
         # AlleleID -> set of MP IDs (strip ",label" suffix)
         allele_to_mp = {}
         for aid, phenos in mouse_phenotype_df[['AlleleID', 'Phenotypes']].itertuples(index=False):
@@ -382,13 +387,13 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
                 mps = [p.split(',')[0] for p in phenos if isinstance(p, str) and p.startswith('MP:')]
                 allele_to_mp.setdefault(aid, set()).update(mps)
 
-        # Input Name -> variant HP set
-        name_to_hp_variant = {}
-        if have_hp_variant:
-            for name, hps in hum_prt_df[['Name', 'HP_IDs_variant']].drop_duplicates(subset=['Name']).itertuples(index=False):
-                name_to_hp_variant[name] = set(hps) if isinstance(hps, list) else set()
+        # Input Name -> list of MONDO disease IDs for the variant
+        name_to_mondos = {}
+        if have_mondo:
+            for name, mondos in hum_prt_df[['Name', 'MONDO']].drop_duplicates(subset=['Name']).itertuples(index=False):
+                name_to_mondos[name] = list(mondos) if isinstance(mondos, list) else []
 
-        # Input Name -> gene HP set (same across all transcripts of the same input variant)
+        # Input Name -> gene HP set (invariant across the variant's transcripts)
         name_to_hp_gene = {}
         if have_hp_gene:
             for name, hps in hum_prt_df[['Name', 'HP_IDs_gene']].drop_duplicates(subset=['Name']).itertuples(index=False):
@@ -396,15 +401,37 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
 
         def _score_row(r):
             mp_terms = allele_to_mp.get(r['AlleleID'], set())
-            variant_hps = name_to_hp_variant.get(r['Input Name'], set())
             gene_hps = name_to_hp_gene.get(r['Input Name'], set())
 
-            d_variant = phenotype_coverage_detailed(mp_terms, variant_hps)
+            # Per-disease variant scoring
+            mondos = name_to_mondos.get(r['Input Name'], [])
+            per_disease = []  # list of (score, mondo_id)
+            for m in mondos:
+                disease_hps = set(lookup_hps_for_mondo(m))
+                if not disease_hps:
+                    continue
+                d = phenotype_coverage_detailed(mp_terms, disease_hps)
+                if d['score'] is not None:
+                    per_disease.append((d['score'], m))
+
+            if per_disease:
+                top_score = max(s for s, _ in per_disease)
+                top_mondos = [m for s, m in per_disease if s == top_score]
+                names = sorted({n for n in (lookup_name_for_mondo(m) for m in top_mondos) if n})
+                matched_names = '; '.join(names)
+                variant_score = top_score
+            else:
+                matched_names = ''
+                variant_score = None
+
+            # Gene score (asymmetric). Its mapped/total counts describe the
+            # mouse MP set and are the same regardless of which human reference
+            # we score against, so we use them for the two counter columns.
             d_gene = phenotype_coverage_detailed(mp_terms, gene_hps)
 
             return pd.Series(
-                [d_variant['score'], d_gene['score'],
-                 d_variant['mapped_mp_count'], d_variant['total_mp_count']],
+                [matched_names, variant_score, d_gene['score'],
+                 d_gene['mapped_mp_count'], d_gene['total_mp_count']],
                 index=cols,
             )
 
@@ -415,8 +442,9 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
 
     # Belt-and-suspenders NaN handling: new columns from .apply() can get
     # promoted to float64 with NaN which doesn't JSON-serialize cleanly.
-    for col in ['Phenotype Score (variant)', 'Phenotype Score (gene)',
-                'MP Terms Mapped', 'MP Terms Total']:
+    for col in ['Matched Disease(s)', 'Phenotype Score (variant)',
+                'Phenotype Score (gene)', 'MP Terms Mapped', 'MP Terms Total']:
+
         if col in score_df.columns:
             score_df[col] = score_df[col].astype(object).where(score_df[col].notna(), None)
     score_df = score_df.astype(object).where(pd.notnull(score_df), None)
