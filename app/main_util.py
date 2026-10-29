@@ -365,7 +365,7 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     # (translated to HP via SSSOM) against two human HP sets per input variant:
     #   - variant-level: ClinVar/variant_summary HPs + phenotype.hpoa HPs for the MONDO disease
     #   - gene-level: HPO's genes_to_phenotype.txt
-    from app.phenotype_similarity import phenotype_similarity_detailed, phenotype_coverage_detailed
+    from app.phenotype_similarity import phenotype_coverage_detailed
 
     cols = ['Phenotype Score (variant)', 'Phenotype Score (gene)',
             'MP Terms Mapped', 'MP Terms Total']
@@ -399,7 +399,7 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
             variant_hps = name_to_hp_variant.get(r['Input Name'], set())
             gene_hps = name_to_hp_gene.get(r['Input Name'], set())
 
-            d_variant = phenotype_similarity_detailed(mp_terms, variant_hps)
+            d_variant = phenotype_coverage_detailed(mp_terms, variant_hps)
             d_gene = phenotype_coverage_detailed(mp_terms, gene_hps)
 
             return pd.Series(
