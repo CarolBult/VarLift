@@ -313,16 +313,6 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
         coverage_frames.append(allele_coverage_for_gene(gene, evaluated_ids))
     allele_coverage_df = pd.concat(coverage_frames, ignore_index=True) if coverage_frames else pd.DataFrame()
 
-
-    # Allele coverage: full list of disease-associated MGI alleles for each
-    # output gene, flagging which VarLift could evaluate
-    from app.mouse_coverage import allele_coverage_for_gene
-    evaluated_ids = set(mouse_prt_df['AlleleID'].unique())
-    coverage_frames = []
-    for gene in mouse_gene_df['Gene Symbol'].dropna().unique():
-        coverage_frames.append(allele_coverage_for_gene(gene, evaluated_ids))
-    allele_coverage_df = pd.concat(coverage_frames, ignore_index=True) if coverage_frames else pd.DataFrame()
-
     return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df, allele_coverage_df
 
 def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=None):
