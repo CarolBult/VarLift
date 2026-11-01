@@ -116,6 +116,19 @@ function renderTables(name, gene) {
         phenotypes = window.fullJSON.phenotypes.filter(row => row['Gene Symbol'] === homolog);
         alleleCoverage = (window.fullJSON.allele_coverage || []).filter(row => row['Gene Symbol'] === homolog);
 
+        // Phenotypes move into the coverage table's dropdowns; the separate
+        // table keeps only alleles that are not in the coverage table
+        phenotypesByAllele = new Map();
+        phenotypes.forEach(row => {
+            if (!phenotypesByAllele.has(row['AlleleID'])) phenotypesByAllele.set(row['AlleleID'], row);
+        });
+        const coverageIds = new Set(alleleCoverage.map(row => row['AlleleID']));
+        phenotypes = [...phenotypesByAllele.values()].filter(row => !coverageIds.has(row['AlleleID']));
+        alleleCoverage = alleleCoverage.map(row => ({
+            ...row,
+            Phenotypes: phenotypesByAllele.get(row['AlleleID'])?.Phenotypes || []
+        }));
+
        // Sort output proteins and score dataframes
    //     sortedScores = [...scores].sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
         sortedScores = groupedScoreSort(scores);
@@ -191,11 +204,6 @@ function renderTables(name, gene) {
 
 
         <div class='tableWrapper'>
-            <h2>${targetOrganism} Phenotypes</h2>
-            ${jsonToHTMLTable(phenotypes, "phenotypeTable")}
-        </div>
-
-        <div class='tableWrapper'>
             <h2>Mouse Model Coverage</h2>
             <p class="coverageSummary">${(() => {
                 const total = alleleCoverage.length;
@@ -205,6 +213,13 @@ function renderTables(name, gene) {
             })()}</p>
             ${jsonToHTMLTable(alleleCoverage, "alleleCoverageTable")}
         </div>
+
+        ${alleleCoverage.length > 0 && phenotypes.length === 0 ? '' : `
+        <div class='tableWrapper'>
+            <h2>${alleleCoverage.length > 0 ? `Other ${homolog} Alleles with Phenotypes` : `${targetOrganism} Phenotypes`}</h2>
+            ${alleleCoverage.length > 0 ? `<p class="coverageSummary">These alleles have phenotype annotations in MGI but no disease association, so they are not part of the coverage count above.</p>` : ''}
+            ${jsonToHTMLTable(phenotypes, "phenotypeTable")}
+        </div>`}
     `;
 
 
@@ -322,12 +337,44 @@ function renderTables(name, gene) {
         dom: 'tp',
         pageLength: 20,
         ordering: true,
-        order: [[5, 'desc'], [2, 'asc']]
+        order: [[5, 'desc'], [2, 'asc']],
+        columnDefs: [{ targets: 7, orderable: false }]
     });
 
     // Hide Gene Symbol (same for all rows of a single-gene variant query)
     hideColumnsByName(alleleCoverageTable, ['Gene Symbol']);
 
+    // Open or close an allele's phenotype list beneath its row
+    $('#alleleCoverageTable tbody').on('click', 'button.phenotypeToggle', function () {
+        const row = alleleCoverageTable.row($(this).closest('tr'));
+        if (row.child.isShown()) {
+            row.child.hide();
+            this.setAttribute('aria-expanded', 'false');
+        } else {
+            const phenos = phenotypesByAllele.get(this.dataset.allele).Phenotypes;
+            row.child(`<div class="phenotypeList">${phenotypeLinks(phenos, org)}</div>`).show();
+            this.setAttribute('aria-expanded', 'true');
+        }
+    });
+
+}
+
+
+// Turn an allele's "ID,label" phenotype strings into links, one per line
+function phenotypeLinks(phenotypes, org) {
+    return phenotypes
+        .map(v => {
+            // Split on the first comma only; labels can contain commas
+            const text = String(v);
+            const comma = text.indexOf(',');
+            const id = text.slice(0, comma).trim();
+            const label = text.slice(comma + 1).trim();
+            const url = org === 'human'
+                ? `https://www.informatics.jax.org/vocab/mp_ontology/${id}`
+                : `http://purl.obolibrary.org/obo/HP_${id.split(':')[1]}`;
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${id}: ${label}</a>`;
+        })
+        .join('<br>');
 }
 
 
@@ -352,29 +399,15 @@ function jsonToHTMLTable(data, tableId) {
         columns.forEach(col => {
             let value = row[col] !== undefined ? row[col] : '';
 
-            // Seperate Phenotypes into multiple lines
-            if (col === 'Phenotypes' && Array.isArray(value)) {
+            // Coverage table phenotypes open in a dropdown beneath the row
+            if (col === 'Phenotypes' && tableId === 'alleleCoverageTable') {
+                const count = value.length;
+                value = count === 0 ? 'None' : `<button type="button" class="phenotypeToggle" data-allele="${row['AlleleID']}" aria-expanded="false">${count} phenotype${count === 1 ? '' : 's'}</button>`;
+            }
 
-                if  (org === 'human') {
-                    value = value
-                        .map(v => {
-                            const [id, label] = String(v).split(',').map(s => s.trim());
-                            const url = `https://www.informatics.jax.org/vocab/mp_ontology/${id}`;
-                            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${id}: ${label}</a>`;
-                        })
-                        .filter(v => v.length)
-                        .join('<br>');
-                } else if (org === 'mouse') {
-                        value = value
-                        .map(v => {
-                            const [fullID, label] = String(v).split(',').map(s => s.trim());
-                            const [hp, id] = String(fullID).split(':').map(s => s.trim());
-                            const url = `http://purl.obolibrary.org/obo/HP_${id}`;
-                            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${fullID}: ${label}</a>`;
-                        })
-                        .filter(v => v.length)
-                        .join('<br>');
-                }
+            // Seperate Phenotypes into multiple lines
+            else if (col === 'Phenotypes' && Array.isArray(value)) {
+                value = phenotypeLinks(value, org);
             }
 
             // Add linking for alleles
