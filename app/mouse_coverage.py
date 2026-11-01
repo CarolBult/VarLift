@@ -9,6 +9,7 @@ is used as a secondary source for consequence information when available.
 '''
 import logging
 import pandas as pd
+import re
 
 _VARIANT_ALLELE = None
 _DISEASE_MODELS = None
@@ -102,7 +103,7 @@ def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids):
         rows.append({
             'Gene Symbol': gene_symbol,
             'AlleleID': aid,
-            'AlleleSymbol': symbol,
+            'AlleleSymbol': re.sub(r'<([^>]+)>', r'<sup>\1</sup>', symbol) if isinstance(symbol, str) else symbol,
             'Consequence': consequence if isinstance(consequence, str) else '',
             'Diseases': diseases_by_allele[aid],
             'Evaluated': is_evaluated,

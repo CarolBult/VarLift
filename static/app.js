@@ -112,9 +112,11 @@ function renderTables(name, gene) {
         outputGenes = window.fullJSON.output_genes.filter(row => row['Gene Symbol'] === homolog);
         outputProteins = window.fullJSON.output_variants.filter(row => row['Gene Symbol'] === homolog);
         scores = window.fullJSON.scores.filter(row => row['Input Name'] === name);
+       // phenotypes = window.fullJSON.phenotypes.filter(row => row['Gene Symbol'] === homolog);
         phenotypes = window.fullJSON.phenotypes.filter(row => row['Gene Symbol'] === homolog);
+        alleleCoverage = (window.fullJSON.allele_coverage || []).filter(row => row['Gene Symbol'] === homolog);
 
-        // Sort output proteins and score dataframes
+       // Sort output proteins and score dataframes
    //     sortedScores = [...scores].sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
         sortedScores = groupedScoreSort(scores);
         const rank = new Map(sortedScores.map((row, index) => [`${row['AlleleID']}||${row['Transcript ID']}`, index]));
@@ -139,7 +141,9 @@ function renderTables(name, gene) {
                                                                         && queryProteins.some(r => r.refAA === row.refAA)
                                                                         && queryProteins.some(r => r.varAA === row.varAA));
         scores = window.fullJSON.scores.filter(row => row['Input Name'] === name);
+//        phenotypes = window.fullJSON.phenotypes.filter(row => outputProteins.some(r => r.Name === row.Name));
         phenotypes = window.fullJSON.phenotypes.filter(row => outputProteins.some(r => r.Name === row.Name));
+        alleleCoverage = (window.fullJSON.allele_coverage || []).filter(row => row['Gene Symbol'] === homolog);
 
         // Sort output proteins and score dataframes
  //       sortedScores = [...scores].sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
@@ -189,6 +193,17 @@ function renderTables(name, gene) {
         <div class='tableWrapper'>
             <h2>${targetOrganism} Phenotypes</h2>
             ${jsonToHTMLTable(phenotypes, "phenotypeTable")}
+        </div>
+
+        <div class='tableWrapper'>
+            <h2>Mouse Model Coverage</h2>
+            <p class="coverageSummary">${(() => {
+                const total = alleleCoverage.length;
+                const evaluated = alleleCoverage.filter(r => r.Evaluated).length;
+                if (total === 0) return 'No disease-associated mouse alleles found in MGI.';
+                return `VarLift evaluated <strong>${evaluated} of ${total}</strong> disease-associated ${homolog} alleles in MGI. ${total - evaluated} ${total - evaluated === 1 ? 'allele exists' : 'alleles exist'} but could not be cross-mapped (see table for reasons).`;
+            })()}</p>
+            ${jsonToHTMLTable(alleleCoverage, "alleleCoverageTable")}
         </div>
     `;
 
@@ -301,6 +316,17 @@ function renderTables(name, gene) {
         ordering: false
     });
 
+
+    // Mouse model coverage table
+    const alleleCoverageTable = $('#alleleCoverageTable').DataTable({
+        dom: 'tp',
+        pageLength: 20,
+        ordering: true,
+        order: [[5, 'desc'], [2, 'asc']]
+    });
+
+    // Hide Gene Symbol (same for all rows of a single-gene variant query)
+    hideColumnsByName(alleleCoverageTable, ['Gene Symbol']);
 
 }
 
