@@ -1,3 +1,4 @@
+import gzip
 import json
 import re
 import yaml
@@ -18,6 +19,30 @@ aa_multi_to_single = {'Ala':'A', 'Arg':'R', 'Asn':'N', 'Asp':'D',
                       'Met':'M', 'Phe':'F', 'Pro':'P', 'Ser':'S',
                       'Thr':'T', 'Trp':'W', 'Tyr':'Y', 'Val':'V',
                       'Ter':'*', '=':'='}
+
+
+def count_header_lines(path):
+    '''
+    Counts the '#' comment lines at the top of a file, for use as pandas skiprows.
+    comment='#' would also cut data lines at any '#', such as transgene symbols
+    like Tg(Lck-Notch3)#Issc, losing every column after it.
+
+    Parameters:
+        path: str. Path to file, optionally gzipped.
+
+    Returns:
+        int. Number of leading lines that start with '#'.
+    '''
+    opener = gzip.open if str(path).endswith('.gz') else open
+
+    count = 0
+    with opener(path, 'rt') as f:
+        for line in f:
+            if not line.startswith('#'):
+                break
+            count += 1
+
+    return count
 
 
 def download_file(input_url, output_path):

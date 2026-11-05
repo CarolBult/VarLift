@@ -1,8 +1,11 @@
 import yaml
 import json
 import logging
+import threading
 import pandas as pd
 from cyvcf2 import VCF
+
+from app.data_util import count_header_lines
 
 
 # Load Config
@@ -12,9 +15,12 @@ with open('app/config.yaml') as f:
 
 clinvar_vcf = VCF(config['paths']['clinvar_vcf'])
 
+# The VCF reader is shared by all searches; only one may read it at a time
+clinvar_lock = threading.Lock()
+
 
 MGI_disease_df = pd.read_csv(config['paths']['mgi_disease'],
-                             sep='\t', comment='#', header=None,
+                             sep='\t', skiprows=count_header_lines(config['paths']['mgi_disease']), header=None,
                              names=['DOterm', 'DOID', 'NOTmodel', 'AllelePairs', 'StrainBackground',
                                     'AlleleSymbol', 'AlleleID', 'NumReferences', 'AlleleRepositoryID',
                                     'AlleleRRID', 'MarkerSymbol', 'MarkerMGIid', 'GeneRepositoryID', ''])
@@ -74,14 +80,15 @@ def search_clinvar(chrom, start, end, ref, alt):
 
     try:
         # Filter by region and search for variants
-        for record in clinvar_vcf(region):
-            if record.REF == ref and alt in record.ALT:
+        with clinvar_lock:
+            for record in clinvar_vcf(region):
+                if record.REF == ref and alt in record.ALT:
 
-                # Extract disease names
-                disease_info = record.INFO.get('CLNDISDB')
+                    # Extract disease names
+                    disease_info = record.INFO.get('CLNDISDB')
 
-                if disease_info: 
-                    diseases = [d.split(',') for d in disease_info.split('|')]
+                    if disease_info:
+                        diseases = [d.split(',') for d in disease_info.split('|')]
 
 
     except Exception as e:
@@ -154,15 +161,16 @@ def clndisdb_to_mondo(clinvar_results):
         mondos = []
         terms = []
 
-        # Iterate diseases
-        for disease_tokens in disease_list:
+        # Variants not in ClinVar come through as None; preserve column alignment
+        if disease_list:
+            for disease_tokens in disease_list:
 
-            # Extract MONDO and term
-            mondo, term = resolve_disease_tokens(disease_tokens)
+                # Extract MONDO and term
+                mondo, term = resolve_disease_tokens(disease_tokens)
 
-            if mondo:
-                mondos.append(mondo)
-                terms.append(term)
+                if mondo:
+                    mondos.append(mondo)
+                    terms.append(term)
 
         mondos_col.append(mondos)
         terms_col.append(terms)

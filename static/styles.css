@@ -98,6 +98,18 @@ button:active {
     padding: 0px;
 }
 
+/* SEARCH ERROR MESSAGE */
+.errorMessage {
+    max-width: 600px;
+    margin: 12px 0 0;
+    padding: 10px 14px;
+    background: #fdecea;
+    color: #8a1c13;
+    border: 1px solid #f3b8b2;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
 /* RESULTS LAYOUT */
 #layoutOutput {
     display: none;

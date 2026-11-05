@@ -4,8 +4,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.encoders import jsonable_encoder
 
-from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score
+import logging
+
+from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score, NoCodingVariantsError
 from app.processing_util import process_batch_query
+
+ORGANISM_LABELS = {'human': 'Human (GRCh38)', 'mouse': 'Mouse (GRCm39)'}
 
 app = FastAPI()
 
@@ -21,11 +25,37 @@ class VariantInput(BaseModel):
 
 @app.post('/run_variants')
 def run_variants(data: VariantInput):
+    '''
+    Run the pipeline, returning a readable error message instead of a bare 500
+    when the input is unusable or the analysis fails.
+    '''
+    organism = ORGANISM_LABELS.get(data.organism, data.organism)
+
+    try:
+        return run_pipeline(data)
+
+    except NoCodingVariantsError:
+        message = (f'None of the submitted variants fall in a protein-coding gene on the {organism} genome. '
+                   f'Please confirm that the Organism setting matches your coordinates.')
+        return JSONResponse(status_code=422, content={'error': message})
+
+    except Exception:
+        logging.exception('Analysis failed')
+        message = (f'The analysis could not be completed. Please confirm that the Organism setting ({organism}) '
+                   f'matches your coordinates and that each line uses the format chromosome:start-end:ref/alt.')
+        return JSONResponse(status_code=500, content={'error': message})
+
+
+def run_pipeline(data):
 
     print(data.variants)
     print(data.organism)
 
     variants = process_batch_query(data.variants)
+
+    if variants.empty:
+        message = 'No variants were recognized. Enter one variant per line in the format chromosome:start-end:ref/alt.'
+        return JSONResponse(status_code=422, content={'error': message})
 
     if data.organism == 'human':
 

@@ -3,13 +3,21 @@ document.getElementById('runButton').addEventListener('click', function () {
     const vars = document.getElementById('variantInput').value;
     const org = document.getElementById('queryOrganism').value;
 
+    showError('');
 
     fetch('/run_variants', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ variants: vars, organism: org})
     })
-    .then(res => res.json())
+    .then(async res => {
+        // The server sends {error: message} when the analysis fails
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) {
+            throw new Error(data.error || 'The analysis could not be completed. Please confirm that the Organism setting matches your coordinates.');
+        }
+        return data;
+    })
     .then(data => {
         // store full results
         window.fullJSON = data;
@@ -17,8 +25,24 @@ document.getElementById('runButton').addEventListener('click', function () {
         // build sidebar
         buildSidebar(data);
     })
-    .catch(err => {console.error(err);});
+    .catch(err => {
+        console.error(err);
+
+        // Hide results from any earlier search so they aren't mistaken for this one
+        window.fullJSON = undefined;
+        document.getElementById('layoutOutput').style.display = 'none';
+        showError(err.message);
+    });
 });
+
+
+// Show a message under the Submit button; an empty message hides it
+function showError(message) {
+    const box = document.getElementById('errorMessage');
+    box.textContent = message;
+    box.hidden = !message;
+}
+
 
 
 // Build the sidebar with one button per input variant

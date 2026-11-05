@@ -23,6 +23,10 @@ homology_df = pd.read_csv(config['paths']['mgi_homology'],
 homology_dict = dict(zip(homology_df['HumGeneSymbol'], homology_df['MusGeneSymbol']))
 
 
+class NoCodingVariantsError(Exception):
+    '''Raised when VEP finds no protein-coding consequences for any submitted variant.'''
+
+
 
 # ---- HUMAN QUERY ----
 def hvar_query(variants, assembly='GRCh38'):
@@ -52,6 +56,8 @@ def hvar_query(variants, assembly='GRCh38'):
     # Query VEP
     vep_df = run_vep(variants, 'homo_sapiens', query=True)
 
+    if vep_df.empty:
+        raise NoCodingVariantsError('No protein-coding consequences found on GRCh38.')
 
     # Assign input field
     vep_df['Name'] = vep_df['Submission'].map(submission_names_map)
@@ -301,6 +307,8 @@ def mvar_query(variants, assembly='GRCm39'):
     # Query VEP
     vep_df = run_vep(variants, 'mus_musculus', query=True)
 
+    if vep_df.empty:
+        raise NoCodingVariantsError('No protein-coding consequences found on GRCm39.')
 
     # Assign input field
     vep_df['Name'] = vep_df['Submission'].map(submission_name_map)
@@ -430,8 +438,6 @@ def mvar_query_score(mouse_prt_df, hum_prt_df, gene_inputs):
 
     expanded_df = gene_inputs.merge(hum_prt_df, left_on='Hum Gene', right_on='Gene Symbol', suffixes=('', '_human'))
     expanded_df = expanded_df.merge(mouse_prt_df, left_on='Input Name', right_on='Name', suffixes=('', '_mouse'))
-
-    expanded_df.to_csv('app/testing_results/score_test.csv', index=False)
 
     score_df = pd.DataFrame()
     score_df['Input Name'] = expanded_df['Input Name']
