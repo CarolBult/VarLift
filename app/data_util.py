@@ -124,12 +124,12 @@ def parse_ensembl_gff3(gff3_path, species):
 
 def parse_ncbi_variant_summary(summary_path, output_path):
     '''
-    Parses NCBI TSV file as a source of all human variants and 
-    extracts relevation information and saves it as a csv.
+    Parses NCBI TSV file as a source of all human variants and
+    extracts relevation information and saves it as a parquet.
 
     Parameters:
         summary_path. str. Path to TSV file.
-        output_path. str. Path to final, cleaned TSV file.
+        output_path. str. Path to final, cleaned parquet file.
     '''
     cols = ['#AlleleID', 'Type', 'Name', 'GeneSymbol', 'HGNC_ID', 
         'ClinSigSimple', 'PhenotypeIDS', 'PhenotypeList', 
@@ -152,4 +152,25 @@ def parse_ncbi_variant_summary(summary_path, output_path):
     var_grch38['refAA'] = var_grch38['refAA'].map(aa_multi_to_single)
     var_grch38['varAA'] = var_grch38['varAA'].map(aa_multi_to_single)
 
-    var_grch38.to_csv(output_path, sep='\t', index=False)
+    write_variant_summary_parquet(var_grch38, output_path)
+
+
+def write_variant_summary_parquet(var_df, output_path):
+    '''
+    Saves the parsed variant summary as a parquet sorted by position, so lookups
+    by position or gene only read the few row groups that hold matching rows.
+
+    Parameters:
+        var_df. DataFrame. Parsed GRCh38 variant summary.
+        output_path. str. Path to parquet file.
+    '''
+    var_df = var_df.copy()
+
+    # Chromosome mixes numbers and letters; store as text so parquet accepts it
+    var_df['Chromosome'] = var_df['Chromosome'].map(lambda c: c if pd.isna(c) else str(c))
+
+    # Remember the original file order so results can be returned in it
+    var_df['_order'] = range(len(var_df))
+
+    var_df = var_df.sort_values(['Chromosome', 'Start'], kind='stable')
+    var_df.to_parquet(output_path, index=False, row_group_size=20000, compression='zstd')

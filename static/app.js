@@ -310,7 +310,8 @@ function renderTables(name, gene) {
     });
 
     // Columns that are be hidden by default
-    const scoreHiddenCols = ['Input Name'];
+    // MP Terms Mapped/Total are diagnostics for the phenotype scores; they stay in the JSON download
+    const scoreHiddenCols = ['Input Name', 'MP Terms Mapped', 'MP Terms Total'];
 
     // Hide columns
     hideColumnsByName(scoreTable, scoreHiddenCols);

@@ -95,6 +95,18 @@ To use the web app locally follow the steps below:
 
 3. Insert a list of variants into the search field and submit the query.
 
+### Test Variants
+
+These variants have ClinVar disease associations and mouse models in MGI, so they exercise every part of the output. Enter one per line.
+
+| Organism | Variant | Gene and change | Disease |
+|---|---|---|---|
+| Human (GRCh38) | `X:154030948-154030948:G/A` | MECP2 R306Ter | Rett syndrome |
+| Human (GRCh38) | `7:140753336-140753336:A/T` | BRAF V600E | Cancers including melanoma |
+| Human (GRCh38) | `12:112477719-112477719:A/G` | PTPN11 N308D | Noonan syndrome |
+| Human (GRCh38) | `2:157774114-157774114:C/T` | ACVR1 R206H | Fibrodysplasia ossificans progressiva |
+| Mouse (GRCm39) | `11:69479338-69479338:G/A` | Trp53 R172H | Equivalent of human TP53 R175H |
+
 
 ### Local Python Use
 
@@ -166,6 +178,17 @@ Create new a python file for your use.
     MGI:6140231	Acvr1tm1Glh	ENSMUST00000112601	true	true	true	true	false	true	true	85
     ...
     ```
+
+    For human queries, the score table also has phenotype scores, which compare each mouse allele's phenotypes with the human variant's. Mouse MP terms are translated to HP terms with the [Monarch MP-HP SSSOM mapping](https://github.com/mapping-commons/mh_mapping_initiative), weighting each mapping by its predicate (exactMatch 1.0, narrowMatch and broadMatch 0.75, closeMatch 0.5, relatedMatch 0.25) and its confidence. Each score is the weighted share of the allele's translated HP terms found in a human reference set: |mouse HP ∩ reference HP| / |mouse HP|. This asymmetric coverage, unlike Jaccard similarity, does not penalize a large reference set.
+
+    | Column | Description |
+    |---|---|
+    | Phenotype Score (variant) | Coverage against the HP terms of each disease ClinVar associates with the input variant (from phenotype.hpoa). The highest score across those diseases is reported. |
+    | Matched Disease(s) | The disease(s) that gave the variant score. Diseases that tie for the highest score are all listed, separated by ";". |
+    | Phenotype Score (gene) | Coverage against all HP terms annotated to the human gene (from genes_to_phenotype.txt), independent of disease. |
+    | MP Terms Mapped / MP Terms Total | How many of the allele's MP terms have an HP mapping. A low share means a score of 0 may reflect missing mappings rather than different phenotypes. Hidden in the web app; included in the JSON download. |
+
+    Scores range from 0 to 1. A blank score means the allele has no mapped phenotypes or the variant has no reference phenotypes.
 
 6. Output phenotype table: Provides detailed phenotype information on all alleles in gene.
 
