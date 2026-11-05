@@ -13,6 +13,7 @@ app/vep/
 # Downloaded and generated files (regenerate with data_refresh.py)
 app/data/Ensembl/*.gff3.gz
 app/data/MONDO/*.obo
+app/data/InterPro/
 
 # Linux conda environment generated from environment.yml (see WINDOWS.md)
 environment-linux.yml

@@ -275,7 +275,7 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs):
     match_cols = ['Biotype Match', 'Consequence Match', 'AA Match', 'AA Position Match', 'Exon Match', 'Domain Match', 'Disease Match']
 
     # Calculate precentage of hits
-    score_df['Total Score'] = score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100
+    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
 
 
     score_df = score_df.where(pd.notnull(score_df), None)
@@ -454,7 +454,7 @@ def mvar_query_score(mouse_prt_df, hum_prt_df, gene_inputs):
     match_cols = ['Biotype Match', 'Consequence Match', 'AA Match', 'AA Position Match', 'Exon Match', 'Domain Match']
 
     # Calculate precentage of hits
-    score_df['Total Score'] = score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100
+    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
 
 
     score_df = score_df.where(pd.notnull(score_df), None)

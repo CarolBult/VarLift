@@ -32,6 +32,8 @@ paths:
   ncbi_var_summary: "app/data/NCBI/variant_summary.tsv.gz"
   ncbi_var_summary_grch38: "app/data/NCBI/variant_summary_grch38.tsv"
 
+  pfam_names: "app/data/InterPro/pfam_names.json"
+
   mgi_alleles: "app/data/MGI/VARIANT-ALLELE-MGI.tsv.gz"
   mgi_homology: "app/data/MGI/HOM_ProteinCoding.rpt"
   mgi_disease: "app/data/MGI/MGI_DiseaseMouseModel.rpt"

@@ -5,6 +5,7 @@ import yaml
 import obonet
 import requests
 import pandas as pd
+from urllib.parse import unquote
 from pathlib import Path
 
 
@@ -110,7 +111,8 @@ def parse_ensembl_gff3(gff3_path, species):
 
     # Extract fields using regex
     gene_df['Name'] = gene_df['attributes'].str.extract(r'Name=([^;]+)')
-    gene_df['description'] = gene_df['attributes'].str.extract(r'description=([^;]+)')
+    gene_df['description'] = gene_df['attributes'].str.extract(r'description=([^;]+)')[0].apply(
+        lambda x: unquote(x) if isinstance(x, str) else x)
     gene_df['biotype'] = gene_df['attributes'].str.extract(r'biotype=([^;]+)')
     gene_df['gene_id'] = gene_df['attributes'].str.extract(r'ID=gene:([^;]+)')
 

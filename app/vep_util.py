@@ -5,9 +5,11 @@ import numpy as np
 import pandas as pd
 import subprocess
 import json
+import os
 import platform
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 
 
@@ -27,10 +29,28 @@ vep_input_file = config['paths']['vep_input']
 # Folder holding ensembl-vep.sif, vep_cache and processing (app/vep)
 vep_dir = Path(vep_input_file).parent.parent.resolve()
 
+# Pfam domain names saved from earlier InterPro requests
+pfam_names_file = config['paths']['pfam_names']
+_pfam_names = None
+_pfam_lock = threading.Lock()
+
+
+def _save_pfam_name(pfam_domain_id, long_name):
+    '''
+    Add a domain name to the saved InterPro names, writing the file atomically.
+    '''
+    with _pfam_lock:
+        _pfam_names[pfam_domain_id] = long_name
+        Path(pfam_names_file).parent.mkdir(parents=True, exist_ok=True)
+        tmp_file = f'{pfam_names_file}.tmp'
+        with open(tmp_file, 'w') as f:
+            json.dump(_pfam_names, f, indent=4, sort_keys=True)
+        os.replace(tmp_file, pfam_names_file)
+
 
 def get_domain_name(pfam_domain_id):
     '''
-    Query InterPro Pfam database to get domain name.
+    Get a Pfam domain name, from saved names if present, otherwise from InterPro.
 
     Parameters:
         pfam_domain_id: string. Pfam domain ID to extract full name for.
@@ -38,6 +58,19 @@ def get_domain_name(pfam_domain_id):
     Returns:
         string. The corresponding long name for given domain ID.
     '''
+    global _pfam_names
+
+    # Use a saved name when we have one
+    with _pfam_lock:
+        if _pfam_names is None:
+            try:
+                with open(pfam_names_file) as f:
+                    _pfam_names = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                _pfam_names = {}
+        if pfam_domain_id in _pfam_names:
+            return _pfam_names[pfam_domain_id]
+
     # Construct URL
     url = interpro_base_url + pfam_domain_id
     headers = {'Accept': 'application/json'}
@@ -49,11 +82,15 @@ def get_domain_name(pfam_domain_id):
         # Make request to InterPro REST API
         r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
-        json = r.json()
+        data = r.json()
 
         # Extract domain long name
-        metadata = json['metadata']
+        metadata = data['metadata']
         long_name = metadata['name'].get('name') or metadata['name'].get('value')
+
+        # Save for later searches; failures are not saved so they are retried
+        if long_name:
+            _save_pfam_name(pfam_domain_id, long_name)
 
         # Return domain long name
         return long_name
@@ -250,26 +287,24 @@ def prepare_vep_output(vep_df):
     vep_df['consequence_terms'] = vep_df['consequence_terms'].apply(lambda x: ','.join(x) if isinstance(x, list) else x)
 
 
-    # # Fetch domain names
-    # for domain in vep_df['Domain'].unique():
-    #     if domain == None:
-    #         dom_name = None
-    #     else:
-    #         dom_name = get_domain_name(domain)
-    #     vep_df.loc[vep_df['Domain'] == domain, 'domain_name'] = dom_name
+    # Fetch Pfam domain names from InterPro (one API call per unique domain)
+    if 'Domain' in vep_df.columns:
+        unique_domains = [d for d in vep_df['Domain'].unique() if pd.notna(d)]
+        name_map = {d: get_domain_name(d) for d in unique_domains}
+        vep_df['domain_name'] = vep_df['Domain'].map(name_map)
 
     
     # Create protein DataFrame
-    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'Domain', 'polyphen_prediction', 
+    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'Domain', 'domain_name', 'polyphen_prediction',
             'polyphen_score', 'consequence_terms', 'codons', 'amino_acids', 'refAA', 'protein_start', 'varAA']
     cols_present = [col for col in keep if col in vep_df.columns]
     protein_df = vep_df[cols_present].copy()
 
     # Update column names
-    protein_df.rename(columns={'transcript_id': 'Transcript ID', 'gene_symbol': 'Gene Symbol', 'biotype': 'Biotype', 
-                       'exon': 'Exon Rank', 'Domain': 'Pfam Domain ID', 
-                       'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score', 
-                       'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'}, 
+    protein_df.rename(columns={'transcript_id': 'Transcript ID', 'gene_symbol': 'Gene Symbol', 'biotype': 'Biotype',
+                       'exon': 'Exon Rank', 'Domain': 'Pfam Domain ID', 'domain_name': 'Pfam Domain Name',
+                       'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score',
+                       'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'},
                        inplace=True,  errors='ignore')
     
     return protein_df
