@@ -142,7 +142,7 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
             '--biotype',
             '--symbol',
             '--numbers',
-           '--coding_only']
+            '--coding_only']
 
     
     if species == 'homo_sapiens':
