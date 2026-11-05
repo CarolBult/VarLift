@@ -18,6 +18,7 @@ app/data/MONDO/*.json
 app/data/MONDO/*.obo
 app/data/NCBI/*.vcf.gz*
 app/data/NCBI/*.tsv*
+app/data/InterPro/
 
 # Logs and local artifacts
 app/mapping.log

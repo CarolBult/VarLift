@@ -7,48 +7,27 @@ mouse models associated with a disease, including knockouts, gene traps, and
 transgenics that have no variant-level annotation. VARIANT-ALLELE-MGI.tsv.gz
 is used as a secondary source for consequence information when available.
 '''
-import logging
 import pandas as pd
 import re
 
-_VARIANT_ALLELE = None
-_DISEASE_MODELS = None
+from app.gene_util import mus_alleles_df
+from app.disease_util import MGI_disease_df
 
 
 def _load_variant_allele():
-    global _VARIANT_ALLELE
-    if _VARIANT_ALLELE is not None:
-        return _VARIANT_ALLELE
-    path = 'app/data/MGI/VARIANT-ALLELE-MGI.tsv.gz'
-    logging.info(f'Loading MGI variant-allele table: {path}')
-    df = pd.read_csv(path, sep='\t', skiprows=14, low_memory=False)
-    _VARIANT_ALLELE = df
-    return df
+    '''VARIANT-ALLELE-MGI table, already loaded by gene_util.'''
+    return mus_alleles_df
 
 
 def _load_disease_models():
     '''
-    Load MGI_DiseaseMouseModel.rpt. The file has no header row; comment
-    lines at top start with '#'. Columns we need (0-indexed):
-      0: disease name
-      5: allele symbol (e.g. 'Mecp2<tm1Pplt>')
-      6: allele MGI ID
-      10: gene symbol
+    MGI_DiseaseMouseModel.rpt, already loaded by disease_util, reduced to the
+    disease name, allele symbol (e.g. 'Mecp2<tm1Pplt>'), allele MGI ID and
+    gene symbol.
     '''
-    global _DISEASE_MODELS
-    if _DISEASE_MODELS is not None:
-        return _DISEASE_MODELS
-    path = 'app/data/MGI/MGI_DiseaseMouseModel.rpt'
-    logging.info(f'Loading MGI disease-model table: {path}')
-    df = pd.read_csv(
-        path, sep='\t', comment='#', header=None,
-        usecols=[0, 5, 6, 10],
-        names=['Disease', 'AlleleSymbol', 'AlleleID', 'GeneSymbol'],
-        dtype=str, low_memory=False,
-    )
-    df = df.dropna(subset=['AlleleID', 'GeneSymbol'])
-    _DISEASE_MODELS = df
-    return df
+    df = MGI_disease_df[['DOterm', 'AlleleSymbol', 'AlleleID', 'MarkerSymbol']]
+    df = df.rename(columns={'DOterm': 'Disease', 'MarkerSymbol': 'GeneSymbol'})
+    return df.dropna(subset=['AlleleID', 'GeneSymbol'])
 
 
 def _reason_for(consequence, is_evaluated):

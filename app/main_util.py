@@ -16,11 +16,8 @@ with open('app/config.yaml') as f:
     config = yaml.safe_load(f)
 
 
-# Load homology
-homology_df = pd.read_csv(config['paths']['mgi_homology'],
-                          sep='\t', names=['MGI_ID', 'MusGeneSymbol', 'MusEntrezGeneID', 
-                                           'MusHGNC_ID', 'HumGeneSymbol', 'HumEntrezGeneID'])
-homology_dict = dict(zip(homology_df['HumGeneSymbol'], homology_df['MusGeneSymbol']))
+class NoCodingVariantsError(Exception):
+    '''Raised when VEP finds no protein-coding consequences for any submitted variant.'''
 
 
 
@@ -52,6 +49,8 @@ def hvar_query(variants, assembly='GRCh38'):
     # Query VEP
     vep_df = run_vep(variants, 'homo_sapiens', query=True)
 
+    if vep_df.empty:
+        raise NoCodingVariantsError('No protein-coding consequences found on GRCh38.')
 
     # Assign input field
     vep_df['Name'] = vep_df['Submission'].map(submission_names_map)
@@ -101,16 +100,10 @@ def hvar_query(variants, assembly='GRCh38'):
     # disease cross-references in variant_summary.tsv.
     from app.hpoa import lookup_name_for_disease
 
-    name_to_diseases = {}
-    for _, v in variants.iterrows():
-        dids = lookup_disease_ids(v['Chromosome'], v['Start'])
-        if dids:
-            name_to_diseases[v['Name']] = dids
-
     def _backfill(row):
         if row.get('MONDO') and len(row['MONDO']) > 0:
             return row  # CLNDISDB already provided; keep it
-        dids = name_to_diseases.get(row['Name'], [])
+        dids = coord_to_vs_diseases.get(row['Name'], [])
         if not dids:
             return row
         mondos = sorted({d for d in dids if d.startswith('MONDO:')})
@@ -365,9 +358,6 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     e = time.time()
     print(f'Score Time: {e-s}')
 
-    # Calculate precentage of hits
-    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
-
     # Phenotype equivalency scoring (two tracks):
     # - Variant score: asymmetric coverage of the mouse allele's translated
     #   HPs against each disease the input variant is associated with. We
@@ -481,6 +471,8 @@ def mvar_query(variants, assembly='GRCm39'):
     # Query VEP
     vep_df = run_vep(variants, 'mus_musculus', query=True)
 
+    if vep_df.empty:
+        raise NoCodingVariantsError('No protein-coding consequences found on GRCm39.')
 
     # Assign input field
     vep_df['Name'] = vep_df['Submission'].map(submission_name_map)
@@ -610,8 +602,6 @@ def mvar_query_score(mouse_prt_df, hum_prt_df, gene_inputs):
 
     expanded_df = gene_inputs.merge(hum_prt_df, left_on='Hum Gene', right_on='Gene Symbol', suffixes=('', '_human'))
     expanded_df = expanded_df.merge(mouse_prt_df, left_on='Input Name', right_on='Name', suffixes=('', '_mouse'))
-
-    expanded_df.to_csv('app/testing_results/score_test.csv', index=False)
 
     score_df = pd.DataFrame()
     score_df['Input Name'] = expanded_df['Input Name']

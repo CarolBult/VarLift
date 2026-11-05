@@ -4,6 +4,8 @@ import logging
 import requests
 import pandas as pd
 
+from app.data_util import count_header_lines
+
 # Load Config
 with open('app/config.yaml') as f:
     config = yaml.safe_load(f)
@@ -21,7 +23,8 @@ homology_df = pd.read_csv(config['paths']['mgi_homology'],
                                            'Mus_HGNC_ID', 'HumGeneSymbol', 'HumEntrezGeneID'])
 
 # Load Mus alleles
-mus_alleles_df = pd.read_csv(config['paths']['mgi_alleles'], sep='\t', compression='gzip', low_memory=False, comment='#')
+mus_alleles_df = pd.read_csv(config['paths']['mgi_alleles'], sep='\t', compression='gzip', low_memory=False,
+                             skiprows=count_header_lines(config['paths']['mgi_alleles']))
 
 
 def get_gene_info(gene, species='human'):

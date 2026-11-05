@@ -86,7 +86,7 @@ def refresh_ncbi():
     download_file(url, output_path)
 
     input_path = config['paths']['ncbi_var_summary']
-    output_path = config['paths']['ncbi_var_summary_grch38']
+    output_path = config['paths']['ncbi_var_summary_pqt']
 
     parse_ncbi_variant_summary(input_path, output_path)
 

@@ -1,15 +1,7 @@
 import re
-import yaml
 import pandas as pd
-from cyvcf2 import VCF
 
-# Load Config
-with open('app/config.yaml') as f:
-    config = yaml.safe_load(f)
-
-clinvar_vcf = VCF(config['paths']['clinvar_vcf'])
-
-variant_summary_grch38 = pd.read_csv(config['paths']['ncbi_var_summary_grch38'], sep='\t')
+from app.clinvar_summary import variants_for_genes
 
 
 def process_batch_query(input):
@@ -70,6 +62,9 @@ def prepare_submission(variants):
 def process_human_fetch(hum_gene_df, mouse_protein_df, gene_input_df):
 
     merged_df = mouse_protein_df.merge(gene_input_df, left_on='Gene Symbol', right_on='Mus Gene')
+
+    # Only the homologous genes' rows can match the merge below
+    variant_summary_grch38 = variants_for_genes(merged_df['Hum Gene'].unique().tolist())
 
     homologous_variants = variant_summary_grch38.merge(
         merged_df[['Hum Gene', 'refAA', 'varAA']],

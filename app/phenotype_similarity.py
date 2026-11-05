@@ -2,11 +2,13 @@
 MP (Mammalian Phenotype) to HP (Human Phenotype Ontology) equivalency scoring.
 
 Translates mouse MP terms to HP terms via the Monarch mapping-commons SSSOM file,
-then computes a weighted Jaccard similarity between a mouse allele's phenotype set
-and a human variant's ClinVar-annotated phenotype set.
+then computes an asymmetric coverage score: the weighted fraction of a mouse
+allele's translated HP terms that appear in a human reference HP set.
 '''
 import yaml
 import pandas as pd
+
+from app.data_util import count_header_lines
 
 with open('app/config.yaml') as f:
     _config = yaml.safe_load(f)
@@ -26,7 +28,7 @@ def _load_mp_hp_map():
     df = pd.read_csv(
         _config['paths']['mp_hp_mapping'],
         sep='\t',
-        comment='#',
+        skiprows=count_header_lines(_config['paths']['mp_hp_mapping']),
         dtype=str,
     )
     df['confidence'] = pd.to_numeric(df['confidence'], errors='coerce').fillna(1.0)
@@ -56,50 +58,6 @@ def mp_to_weighted_hp(mp_terms):
             if w > hp_weights.get(hp, 0):
                 hp_weights[hp] = w
     return hp_weights
-
-
-def phenotype_similarity(mouse_mp_terms, human_hp_terms):
-    '''
-    Weighted Jaccard similarity between a mouse allele's MP phenotypes
-    (translated to HP) and a human variant's HP phenotypes.
-
-    Returns float 0.0-1.0, or None if either side has nothing to score.
-    '''
-    mouse_hp_weights = mp_to_weighted_hp(mouse_mp_terms)
-    human_hp = set(human_hp_terms or [])
-
-    if not mouse_hp_weights or not human_hp:
-        return None
-
-    intersection_weight = sum(
-        w for hp, w in mouse_hp_weights.items() if hp in human_hp
-    )
-    union_weight = (
-        sum(mouse_hp_weights.values())
-        + sum(1.0 for hp in human_hp if hp not in mouse_hp_weights)
-    )
-    return round(intersection_weight / union_weight, 3) if union_weight > 0 else None
-
-
-
-def phenotype_similarity_detailed(mouse_mp_terms, human_hp_terms):
-    '''
-    Like phenotype_similarity, but also reports how many MP terms had any
-    HP mapping at all. Useful for distinguishing a true zero-overlap score
-    from a zero that reflects missing SSSOM coverage.
-
-    Returns a dict:
-      - 'score': float 0.0-1.0 or None (same as phenotype_similarity)
-      - 'mapped_mp_count': int, how many of the mouse MP terms are in the SSSOM map
-      - 'total_mp_count': int, total MP terms attached to the allele
-    '''
-    mouse_mp_terms = list(mouse_mp_terms or [])
-    total = len(mouse_mp_terms)
-    mapped = sum(1 for mp in mouse_mp_terms if mp in MP_TO_HP)
-
-    score = phenotype_similarity(mouse_mp_terms, human_hp_terms)
-    return {'score': score, 'mapped_mp_count': mapped, 'total_mp_count': total}
-
 
 
 def phenotype_coverage_detailed(mouse_mp_terms, reference_hp_terms):
