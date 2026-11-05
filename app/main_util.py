@@ -3,6 +3,7 @@ from app.processing_util import prepare_submission, process_human_fetch
 from app.gene_util import fetch_gene_info, fetch_mus_alleles, fetch_homologous_gene, process_mus_alleles
 from app.vep_util import prepare_vep_output, run_vep
 from app.phenotype_util import allele_phenotype_match
+from app.mouse_coverage import allele_coverage_for_gene
 from app.disease_util import assign_clinvar, fetch_mus_doid, clndisdb_to_mondo, map_doids_to_mondo, extract_hp_ids
 
 import time
@@ -218,7 +219,7 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
 
     if mouse_prt_df.empty:
         logging.info('No mouse alleles found.')
-        return mouse_gene_df, mouse_prt_df, pd.DataFrame(), gene_input_df
+        return mouse_gene_df, mouse_prt_df, pd.DataFrame(), gene_input_df, pd.DataFrame()
 
     # Extract phenotypes
     phenotype_df = allele_phenotype_match(mouse_allele_df)
@@ -229,7 +230,7 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
         doid_map = fetch_mus_doid(mouse_prt_df['AlleleID'].unique())
     except:
         logging.info('No Alleles found with disease associations.')
-        return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df
+        return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df, pd.DataFrame()
 
     # Drop alleles without disease associations
     mouse_prt_df = mouse_prt_df[mouse_prt_df['AlleleID'].isin(doid_map.keys())]
@@ -237,7 +238,7 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
 
     if mouse_prt_df.empty:
         logging.info('No disease associated mouse alleles found.')
-        return mouse_gene_df, mouse_prt_df, pd.DataFrame(), gene_input_df
+        return mouse_gene_df, mouse_prt_df, pd.DataFrame(), gene_input_df, pd.DataFrame()
 
     # Prepare common notation names
     mouse_prt_df, _ = prepare_submission(mouse_prt_df)
@@ -297,7 +298,14 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
     e = time.time()
     print(f'Mouse Time: {e-s}')
 
-    return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df
+    # Allele coverage: full list of disease-associated MGI alleles for each
+    # output gene, flagging which VarLift could evaluate
+    evaluated_ids = set(mouse_prt_df['AlleleID'].unique())
+    coverage_frames = [allele_coverage_for_gene(gene, evaluated_ids)
+                       for gene in mouse_gene_df['Gene Symbol'].dropna().unique()]
+    allele_coverage_df = pd.concat(coverage_frames, ignore_index=True) if coverage_frames else pd.DataFrame()
+
+    return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df, allele_coverage_df
 
 
 def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=None):

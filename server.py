@@ -6,6 +6,7 @@ from fastapi.encoders import jsonable_encoder
 
 import math
 import logging
+import pandas as pd
 
 from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score, NoCodingVariantsError
 from app.processing_util import process_batch_query
@@ -99,10 +100,13 @@ def run_pipeline(data):
         message = 'No variants were recognized. Enter one variant per line in the format chromosome:start-end:ref/alt.'
         return JSONResponse(status_code=422, content={'error': message})
 
+    # Mouse model coverage is only computed for human queries
+    allele_coverage_df = pd.DataFrame()
+
     if data.organism == 'human':
 
         query_gene_df, query_prt_df, input_genes = hvar_query(variants)
-        output_gene_df, output_prt_df, output_phenotype_df, input_genes = mvar_fetch(input_genes)
+        output_gene_df, output_prt_df, output_phenotype_df, input_genes, allele_coverage_df = mvar_fetch(input_genes)
         score_df = hvar_query_score(query_prt_df, output_prt_df, input_genes, mouse_phenotype_df=output_phenotype_df)
         output_phenotype_df = sort_phenotypes_by_score(output_phenotype_df, score_df)
 
@@ -119,7 +123,8 @@ def run_pipeline(data):
             'output_variants': output_prt_df.to_dict(orient='records'),
             'scores': score_df.to_dict(orient='records'),
             'phenotypes': output_phenotype_df.to_dict(orient='records'),
-            'gene_mapping': input_genes.to_dict(orient='records')}
+            'gene_mapping': input_genes.to_dict(orient='records'),
+            'allele_coverage': allele_coverage_df.to_dict(orient='records')}
 
     safe_result = scrub_nan(jsonable_encoder(results))
 

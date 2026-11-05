@@ -228,6 +228,42 @@ table.dataTable tbody tr:hover {
     overflow-x: auto;
 }
 
+/* PHENOTYPE DROPDOWNS */
+button.phenotypeToggle,
+button.phenotypeToggle:hover,
+button.phenotypeToggle:active {
+    margin: 0;
+    padding: 4px 8px;
+    background: transparent;
+    color: #1C2A66;
+    border: 1px solid #c9d0e3;
+    border-radius: 4px;
+    box-shadow: none;
+    transform: none;
+    font-size: inherit;
+    font-weight: normal;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+button.phenotypeToggle:hover {
+    background: #eef1f8;
+}
+
+button.phenotypeToggle::before {
+    content: '\25B8\00A0';
+}
+
+button.phenotypeToggle[aria-expanded="true"]::before {
+    content: '\25BE\00A0';
+}
+
+.phenotypeList {
+    padding: 4px 12px;
+    line-height: 1.6;
+    columns: 2;
+}
+
 
 /* DETAILS */
 .details {
