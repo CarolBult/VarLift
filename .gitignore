@@ -9,3 +9,13 @@ app/results/
 app/testing_results/
 app/testing/
 app/vep/
+
+# Downloaded and generated files (regenerate with data_refresh.py)
+app/data/Ensembl/*.gff3.gz
+app/data/MONDO/*.obo
+
+# Linux conda environment generated from environment.yml (see WINDOWS.md)
+environment-linux.yml
+
+# Editor swap files
+*.swp

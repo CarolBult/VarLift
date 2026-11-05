@@ -12,7 +12,7 @@ Genome sequencing has become increasingly prevalent in clinical and research set
 
 ## Instructions
 ### Prerequisites
-1. macOS: VarLift has been created for macOS, but could easily be adapted for personal on Linux by removing the Apptainer call from the vep command.
+1. macOS, Linux, or Windows: VarLift was created for macOS and also runs on Linux and on Windows through WSL2. On Windows, follow [WINDOWS.md](WINDOWS.md) in place of the Lima steps below.
 
 2. Homebrew: Used to download Lima
 

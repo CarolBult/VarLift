@@ -5,6 +5,9 @@ import numpy as np
 import pandas as pd
 import subprocess
 import json
+import platform
+import shutil
+import tempfile
 from pathlib import Path
 
 
@@ -20,6 +23,9 @@ interpro_base_url = config['api']['interpro_base_url']
 apptainer_main = config['paths']['apptainer_main']
 vep_output_file = config['paths']['vep_output']
 vep_input_file = config['paths']['vep_input']
+
+# Folder holding ensembl-vep.sif, vep_cache and processing (app/vep)
+vep_dir = Path(vep_input_file).parent.parent.resolve()
 
 
 def get_domain_name(pfam_domain_id):
@@ -76,22 +82,19 @@ def extract_pfam_name(domain_list):
     return None
 
 
-def vep_input(variants):
+def vep_input(variants, input_path):
     '''
     Creates a VCFv4.0 of unique variants in given DataFrame.
 
     Parameters:
         variants: DataFrame. Contains Chromosome, Start, Ref, Alt
-    
-    Creates file processing/vep/input.vcf
+        input_path: Path. VCF file to create.
     '''
     unique_variants = variants.drop_duplicates(subset='Submission')
 
     print(unique_variants)
 
-    Path(vep_input_file).parent.mkdir(parents=True, exist_ok=True)
-
-    with open(vep_input_file, 'w') as f:
+    with open(input_path, 'w') as f:
         # VCF meta-information
         f.write('##fileformat=VCFv4.0\n')
 
@@ -109,26 +112,36 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
 
     Parameters:
         species: str. Either 'homo_sapiens' or 'mus_musculus'.
-        input_file: str. Input file in processing dictionary. Defaults to 'input.vcf'
-        output_file: str. Output file in processing dictionary. Defaults to 'output.json'
+        input_file: str. Input file, relative to the processing directory. Defaults to 'input.vcf'
+        output_file: str. Output file, relative to the processing directory. Defaults to 'output.json'
     '''
 
-    cmd = ['limactl', 'shell', 'apptainer', '--',
-           'apptainer', 'exec', 
-           '--bind', '/main:/main',
-           '/main/ensembl-vep.sif', 'vep',
-           '--dir_cache', '/main/vep_cache',
-           '--input_file', f'/main/processing/{input_file}',
-           '--output_file', f'/main/processing/{output_file}',
-           '--json',
-           '--cache',
-           '--offline',
-           '--force_overwrite',
-           '--species', species,
-           '--domains',
-           '--biotype',
-           '--symbol',
-           '--numbers',
+    # macOS runs Apptainer inside the Lima VM, where app/vep is already mounted at /main.
+    # Linux and Windows (WSL) run Apptainer directly, binding app/vep to /main; the
+    # image path is read before the bind applies, so it must be the host path.
+    if platform.system() == 'Darwin':
+        cmd = ['limactl', 'shell', 'apptainer', '--',
+               'apptainer', 'exec',
+               '--bind', '/main:/main',
+               '/main/ensembl-vep.sif']
+    else:
+        cmd = ['apptainer', 'exec',
+               '--bind', f'{vep_dir}:/main',
+               f'{vep_dir}/ensembl-vep.sif']
+
+    cmd += ['vep',
+            '--dir_cache', '/main/vep_cache',
+            '--input_file', f'/main/processing/{input_file}',
+            '--output_file', f'/main/processing/{output_file}',
+            '--json',
+            '--cache',
+            '--offline',
+            '--force_overwrite',
+            '--species', species,
+            '--domains',
+            '--biotype',
+            '--symbol',
+            '--numbers',
            '--coding_only']
 
     
@@ -273,19 +286,28 @@ def run_vep(variants, species, query=True):
     Returns:
         DataFrame. VEP Output.
     '''
-
-    vep_input(variants)
+    # Each run gets its own folder so simultaneous searches can't overwrite each other's files
+    processing_dir = Path(vep_input_file).parent
+    processing_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = Path(tempfile.mkdtemp(dir=processing_dir))
 
     try:
-        apptainer_vep(species, query=query)
-        
-        vep_df = parse_vep_json()
+        vep_input(variants, run_dir / 'input.vcf')
 
-    except:
-        logging.error('VEP Request Failed')
-        vep_df = pd.DataFrame(columns=['gene_symbol','transcript_id','amino_acids','protein_start',
-                                       'consequence_terms','exon','codons','impact','biotype',
-                                       'Domain','Submission','Name'])
-    
+        try:
+            apptainer_vep(species, query=query,
+                          input_file=f'{run_dir.name}/input.vcf', output_file=f'{run_dir.name}/output.json')
+
+            vep_df = parse_vep_json(run_dir / 'output.json')
+
+        except:
+            logging.error('VEP Request Failed')
+            vep_df = pd.DataFrame(columns=['gene_symbol','transcript_id','amino_acids','protein_start',
+                                           'consequence_terms','exon','codons','impact','biotype',
+                                           'Domain','Submission','Name'])
+
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
+
     return vep_df
 
