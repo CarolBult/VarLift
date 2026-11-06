@@ -35,8 +35,10 @@ def run_variants(data: VariantInput):
         return run_pipeline(data)
 
     except NoCodingVariantsError:
-        message = (f'None of the submitted variants fall in a protein-coding gene on the {organism} genome. '
-                   f'Please confirm that the Organism setting matches your coordinates.')
+        message = (f'None of the submitted variants change the coding sequence of a gene on the {organism} genome. '
+                   f'VarLift matches variants by amino-acid position, so intronic, splice-site, UTR and '
+                   f'intergenic variants cannot be evaluated. Please also confirm that the Organism setting '
+                   f'matches your coordinates.')
         return JSONResponse(status_code=422, content={'error': message})
 
     except Exception:
