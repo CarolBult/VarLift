@@ -27,6 +27,10 @@ apptainer_main = config['paths']['apptainer_main']
 vep_output_file = config['paths']['vep_output']
 vep_input_file = config['paths']['vep_input']
 
+# Number of VEP worker processes (--fork); None runs VEP in one process.
+# The batch runner sets this, the web app leaves it unset.
+vep_forks = None
+
 # Pfam domain names saved from earlier InterPro requests
 pfam_names_file = config['paths']['pfam_names']
 _pfam_names = None
@@ -172,6 +176,9 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
 
     if coding_only:
         cmd += ['--coding_only']
+
+    if vep_forks:
+        cmd += ['--fork', str(vep_forks)]
     
     if species == 'homo_sapiens':
         cmd += ['--polyphen', 'b',

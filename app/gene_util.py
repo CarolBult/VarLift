@@ -93,6 +93,9 @@ def fetch_gene_info(genes, species='human'):
     if species == 'human': pqt = human_gene_pqt
     elif species == 'mouse': pqt = mouse_gene_pqt
 
+    # Genes without a symbol (e.g. unnamed Ensembl genes VEP picked) can't be looked up by name
+    genes = [g for g in genes if pd.notna(g)]
+
     # Subset parquet to requested genes
     subset = pqt[pqt['Name'].isin(genes)]
 
