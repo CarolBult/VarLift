@@ -123,6 +123,28 @@ def parse_ensembl_gff3(gff3_path, species):
     gene_df.to_parquet(config['paths'][f'{species}_gene_pqt'])
 
 
+def parse_ensembl_exons(gff3_path, species):
+    '''
+    Parses Ensembl GFF3 file to extract exon coordinates per transcript and saves them
+    as a parquet file. Used to place intronic variants relative to the nearest exon.
+
+    Parameters:
+        gff3_path. str. Path to gff3 file.
+        species. str. 'human' or 'mouse'.
+    '''
+    cols = ['seqid','source','type','start','end','score','strand','phase','attributes']
+    exon_df = pd.read_csv(gff3_path, sep='\t', comment='#', compression='gzip', header=None, names=cols,
+                          usecols=['type', 'start', 'end', 'strand', 'attributes'], low_memory=False)
+    exon_df = exon_df[exon_df['type'] == 'exon']
+
+    exon_df['transcript_id'] = exon_df['attributes'].str.extract(r'Parent=transcript:([^;]+)', expand=False)
+    exon_df['rank'] = exon_df['attributes'].str.extract(r'rank=(\d+)', expand=False).astype(int)
+
+    exon_df = exon_df[['transcript_id', 'rank', 'start', 'end', 'strand']].dropna(subset=['transcript_id'])
+
+    exon_df.to_parquet(config['paths'][f'{species}_exon_pqt'], index=False)
+
+
 def parse_ncbi_variant_summary(summary_path, output_path):
     '''
     Parses NCBI TSV file as a source of all human variants and

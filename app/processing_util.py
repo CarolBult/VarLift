@@ -2,6 +2,7 @@ import re
 import pandas as pd
 
 from app.clinvar_summary import variants_for_genes
+from app.variant_scoring import scoring_class, SPLICE
 
 
 def process_batch_query(input):
@@ -66,12 +67,26 @@ def process_human_fetch(hum_gene_df, mouse_protein_df, gene_input_df):
     # Only the homologous genes' rows can match the merge below
     variant_summary_grch38 = variants_for_genes(merged_df['Hum Gene'].unique().tolist())
 
-    homologous_variants = variant_summary_grch38.merge(
-        merged_df[['Hum Gene', 'refAA', 'varAA']],
+    splice = merged_df['Molecular Consequence'].apply(scoring_class) == SPLICE
+
+    # Coding variants match ClinVar variants with the same amino-acid change
+    coding_matches = variant_summary_grch38.merge(
+        merged_df.loc[~splice, ['Hum Gene', 'refAA', 'varAA']],
         left_on=['GeneSymbol', 'refAA', 'varAA'],
         right_on=['Hum Gene', 'refAA', 'varAA'],
         how='inner'
     )
+
+    # Splice-site and intronic variants match ClinVar SNVs the same distance into an intron (c.123+5G>A)
+    intron_offset = variant_summary_grch38['Name'].str.extract(r'c\.[-*]?\d+([+-]\d+)[ACGT]>[ACGT]', expand=False)
+    intronic_matches = variant_summary_grch38.assign(**{'Intron Offset': intron_offset}).merge(
+        merged_df.loc[splice, ['Hum Gene', 'Intron Offset']].dropna().drop_duplicates(),
+        left_on=['GeneSymbol', 'Intron Offset'],
+        right_on=['Hum Gene', 'Intron Offset'],
+        how='inner'
+    ).drop(columns='Intron Offset')
+
+    homologous_variants = pd.concat([coding_matches, intronic_matches], ignore_index=True)
 
     homologous_variants = homologous_variants.merge(
         hum_gene_df[['Gene Symbol', 'Strand']],

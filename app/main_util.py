@@ -1,7 +1,8 @@
 from app.log_util import log_batch_query
 from app.processing_util import prepare_submission, process_human_fetch
 from app.gene_util import fetch_gene_info, fetch_mus_alleles, fetch_homologous_gene, process_mus_alleles
-from app.vep_util import prepare_vep_output, run_vep
+from app.vep_util import prepare_vep_output, run_vep_scorable
+from app.variant_scoring import structural_matches, total_score, STRUCTURAL_COLS
 from app.phenotype_util import allele_phenotype_match
 from app.disease_util import assign_clinvar, fetch_mus_doid, clndisdb_to_mondo, map_doids_to_mondo, extract_hp_ids
 
@@ -17,7 +18,7 @@ with open('app/config.yaml') as f:
 
 
 class NoCodingVariantsError(Exception):
-    '''Raised when VEP finds no protein-coding consequences for any submitted variant.'''
+    '''Raised when VEP finds no gene consequences for any submitted variant.'''
 
 
 
@@ -138,12 +139,12 @@ def hvar_query(variants, assembly='GRCh38'):
     variants, submission_names_map = prepare_submission(variants)
 
 
-    # Query VEP
-    vep_df = run_vep(variants, 'homo_sapiens', query=True)
+    # Query VEP for coding, splice-site and intronic consequences
+    vep_df, noncoding_vep_df = run_vep_scorable(variants, 'homo_sapiens', query=True)
 
-    # Variants without a coding consequence are reported separately
+    # Variants that can't be scored are reported separately
     from app.unevaluated import unevaluated_variants
-    unevaluated_df = unevaluated_variants(variants, vep_df.get('Submission', []), 'homo_sapiens')
+    unevaluated_df = unevaluated_variants(variants, vep_df.get('Submission', []), 'homo_sapiens', noncoding_vep_df)
 
     if vep_df.empty:
         if unevaluated_df.empty:
@@ -269,7 +270,7 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
 
 
     # Query VEP for each variant
-    variant_vep = run_vep(mouse_prt_df, 'mus_musculus', query=False)
+    variant_vep, _ = run_vep_scorable(mouse_prt_df, 'mus_musculus', query=False)
 
     # Clean VEP output
     mouse_prt_df = prepare_vep_output(variant_vep)
@@ -297,7 +298,7 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
 
     # Rearrange columns
     mouse_prt_df = mouse_prt_df[['Submission', 'Gene Symbol', 'AlleleID', 'AlleleSymbol', 'Transcript ID', 'Biotype', 
-                                 'Exon Rank', 'Pfam Domain ID', 'Molecular Consequence', 
+                                 'Exon Rank', 'Intron Rank', 'Intron Offset', 'Pfam Domain ID', 'Molecular Consequence', 
                                  'Codon Switch', 'Amino Acids', 'refAA', 'varAA', 'Associated Diseases', 'MONDO']]
 
 
@@ -362,19 +363,14 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     score_df['AlleleID'] = expanded_df['AlleleID']
     score_df['Allele Symbol'] = expanded_df['AlleleSymbol']
     score_df['Transcript ID'] = expanded_df['Transcript ID_mouse']
-    score_df['Biotype Match'] = expanded_df['Biotype_human'] == expanded_df['Biotype_mouse']
-    score_df['Consequence Match'] = expanded_df['Molecular Consequence_human'] == expanded_df['Molecular Consequence_mouse']
-    score_df['AA Match'] = (expanded_df['refAA_human'] == expanded_df['refAA_mouse']) & (expanded_df['varAA_human'] == expanded_df['varAA_mouse'])
-    score_df['AA Position Match'] = expanded_df['Amino Acids_human'] == expanded_df['Amino Acids_mouse']
-    score_df['Exon Match'] = expanded_df['Exon Rank_human'] == expanded_df['Exon Rank_mouse']
-    score_df['Domain Match'] = expanded_df['Pfam Domain ID_human'] == expanded_df['Pfam Domain ID_mouse']
+    score_df = pd.concat([score_df, structural_matches(expanded_df, '_human', '_mouse')], axis=1)
     score_df['Disease Match'] = expanded_df.apply(lambda r: bool(r['MONDO_set_human'] & r['MONDO_set_mouse']), axis=1)
 
     # columns which can be attributed to score
-    match_cols = ['Biotype Match', 'Consequence Match', 'AA Match', 'AA Position Match', 'Exon Match', 'Domain Match', 'Disease Match']
+    match_cols = STRUCTURAL_COLS + ['Disease Match']
 
-    # Calculate precentage of hits
-    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
+    # Percent of the criteria that apply to the variant's class
+    score_df['Total Score'] = total_score(score_df, match_cols)
 
 
     score_df = score_df.where(pd.notnull(score_df), None)
@@ -492,12 +488,12 @@ def mvar_query(variants, assembly='GRCm39'):
     variants, submission_name_map = prepare_submission(variants)
 
 
-    # Query VEP
-    vep_df = run_vep(variants, 'mus_musculus', query=True)
+    # Query VEP for coding, splice-site and intronic consequences
+    vep_df, noncoding_vep_df = run_vep_scorable(variants, 'mus_musculus', query=True)
 
-    # Variants without a coding consequence are reported separately
+    # Variants that can't be scored are reported separately
     from app.unevaluated import unevaluated_variants
-    unevaluated_df = unevaluated_variants(variants, vep_df.get('Submission', []), 'mus_musculus')
+    unevaluated_df = unevaluated_variants(variants, vep_df.get('Submission', []), 'mus_musculus', noncoding_vep_df)
 
     # MGI alleles at the submitted coordinates
     from app.mouse_coverage import mgi_alleles_at, query_allele_coverage, query_other_alleles
@@ -597,7 +593,7 @@ def hvar_fetch(mouse_prt_df, input_mapping_df, assembly='GRCh38'):
     # Query VEP for each variant
     variants, submission_HGVS_map = prepare_submission(homologous_variants)
     
-    variant_vep = run_vep(variants, 'homo_sapiens', query=False)
+    variant_vep, _ = run_vep_scorable(variants, 'homo_sapiens', query=False)
 
 
     # Assign name field
@@ -661,18 +657,13 @@ def mvar_query_score(mouse_prt_df, hum_prt_df, gene_inputs):
     score_df['Input Name'] = expanded_df['Input Name']
     score_df['Name'] = expanded_df['Name']
     score_df['Transcript ID'] = expanded_df['Transcript ID']
-    score_df['Biotype Match'] = expanded_df['Biotype_mouse'] == expanded_df['Biotype']
-    score_df['Consequence Match'] = expanded_df['Molecular Consequence_mouse'] == expanded_df['Molecular Consequence']
-    score_df['AA Match'] = (expanded_df['refAA_mouse'] == expanded_df['refAA']) & (expanded_df['varAA_mouse'] == expanded_df['varAA'])
-    score_df['AA Position Match'] = expanded_df['Amino Acids_mouse'] == expanded_df['Amino Acids']
-    score_df['Exon Match'] = expanded_df['Exon Rank_mouse'] == expanded_df['Exon Rank']
-    score_df['Domain Match'] = expanded_df['Pfam Domain ID_mouse'] == expanded_df['Pfam Domain ID']
+    score_df = pd.concat([score_df, structural_matches(expanded_df, '_mouse', '')], axis=1)
 
     # columns which can be attributed to score
-    match_cols = ['Biotype Match', 'Consequence Match', 'AA Match', 'AA Position Match', 'Exon Match', 'Domain Match']
+    match_cols = STRUCTURAL_COLS
 
-    # Calculate precentage of hits
-    score_df['Total Score'] = (score_df[match_cols].sum(axis=1) / score_df[match_cols].notna().sum(axis=1) * 100).round(1)
+    # Percent of the criteria that apply to the variant's class
+    score_df['Total Score'] = total_score(score_df, match_cols)
 
 
     score_df = score_df.astype(object).where(pd.notnull(score_df), None)

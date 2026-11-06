@@ -1,11 +1,10 @@
 '''
 Report submitted variants that VarLift cannot evaluate.
 
-VarLift matches variants by amino-acid position, so variants with no coding
-consequence (intronic, splice-site, UTR, intergenic) never enter the scoring
-pipeline. They can still have disease associations and mouse alleles, so this
-module annotates them with their non-coding consequence and reports what is
-known about them.
+VarLift scores coding, splice-site and intronic variants, so variants in UTRs,
+non-coding transcripts or between genes never enter the scoring pipeline. They
+can still have disease associations and mouse alleles, so this module annotates
+them with their consequence and reports what is known about them.
 '''
 import pandas as pd
 
@@ -18,16 +17,17 @@ def _reason_for(consequence):
     if not isinstance(consequence, str) or consequence == '':
         return 'VEP could not annotate this variant'
     if 'intergenic' in consequence:
-        return 'Not within a gene, so there is no amino-acid change to match'
-    return f'No amino-acid change ({consequence}), so the variant cannot be matched by protein position'
+        return 'Not within a gene, so there is nothing to match'
+    return f'Not a coding, splice-site or intronic variant ({consequence}), so there is nothing to match'
 
 
-def _annotate(variants, species):
+def _annotate(variants, species, vep_df=None):
     '''
     One row per variant: the gene, transcript and consequence VEP picks without
     the coding-only filter. Variants VEP could not annotate keep empty fields.
     '''
-    vep_df = run_vep(variants, species, query=True, coding_only=False)
+    if vep_df is None:
+        vep_df = run_vep(variants, species, query=True, coding_only=False)
 
     cols = ['Submission', 'gene_symbol', 'transcript_id', 'biotype', 'consequence_terms', 'exon', 'intron']
     vep_df = vep_df.reindex(columns=cols).drop_duplicates(subset=['Submission'])
@@ -50,25 +50,26 @@ def _homologs(genes, species):
     return hom.groupby(src)[dst].apply(lambda s: ', '.join(sorted(set(s.dropna())))).to_dict()
 
 
-def unevaluated_variants(variants, coding_submissions, species):
+def unevaluated_variants(variants, scored_submissions, species, vep_df=None):
     '''
     Annotate the submitted variants that have no coding consequence.
 
     Parameters:
         variants: DataFrame. Submitted variants with Name, Submission, Chromosome, Start, Stop, Ref, Alt.
-        coding_submissions: iterable of str. Submissions that VEP found coding consequences for.
+        scored_submissions: iterable of str. Submissions that are scored (coding, splice-site or intronic).
         species: str. Either 'homo_sapiens' or 'mus_musculus'.
+        vep_df: DataFrame, optional. VEP output without the coding-only filter, if already run.
 
     Returns:
         DataFrame. One row per variant (per matching MGI allele for mouse) with its gene,
         consequence, the reason it was not evaluated, and known disease associations.
     '''
     # assign_clinvar pairs rows with names by position, so the index must start at 0
-    rest = variants[~variants['Submission'].isin(set(coding_submissions))].reset_index(drop=True)
+    rest = variants[~variants['Submission'].isin(set(scored_submissions))].reset_index(drop=True)
     if rest.empty:
         return pd.DataFrame()
 
-    report = _annotate(rest, species)
+    report = _annotate(rest, species, vep_df)
 
     homolog_col = 'Mouse Homolog' if species == 'homo_sapiens' else 'Human Homolog'
     homologs = _homologs(report['Gene Symbol'].dropna().unique(), species)

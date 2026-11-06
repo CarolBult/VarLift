@@ -11,6 +11,8 @@ import tempfile
 import threading
 from pathlib import Path
 
+from app.variant_scoring import add_intron_offsets, scoring_class, SPLICE
+
 
 # Load Config
 with open('app/config.yaml') as f:
@@ -257,6 +259,12 @@ def prepare_vep_output(vep_df):
         DataFrame. Containing Transcript ID, Gene Symbol, HGVS, Biotype, Exon Rank, Pfam Domain ID, Pfam Domain Name, Polyphen Prediction
         Polyphen Score, Molecular Consequence, Codon Switch, Amino Acids, refAA, varAA.
     '''
+    # Splice-site and intronic variants have no protein fields, and scoring compares
+    # intron fields for every variant, so these are always present
+    for col in ['protein_start', 'amino_acids', 'codons', 'exon', 'intron', 'intron_offset', 'Domain']:
+        if col not in vep_df.columns:
+            vep_df[col] = None
+
     # Split amino_acids to REFAA and VARAA if in X/Y format
     vep_df['protein_start'] = vep_df['protein_start'].astype('Int64')
 
@@ -267,8 +275,8 @@ def prepare_vep_output(vep_df):
     vep_df['refAA'] = aa['refAA']
     vep_df['varAA'] = aa['varAA']
 
-    # Handle synoymous variants
-    vep_df["varAA"] = vep_df["varAA"].fillna("=")
+    # Handle synoymous variants (non-coding rows have no amino acids at all)
+    vep_df["varAA"] = vep_df["varAA"].where(vep_df["refAA"].isna(), vep_df["varAA"].fillna("="))
 
 
     # Build the change string
@@ -300,14 +308,15 @@ def prepare_vep_output(vep_df):
     # Create protein DataFrame
 #    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'Domain', 'polyphen_prediction', 
 #           'polyphen_score', 'consequence_terms', 'codons', 'amino_acids', 'refAA', 'protein_start', 'varAA']
-    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'Domain', 'domain_name', 'polyphen_prediction',
+    keep = ['Name', 'Submission', 'gene_symbol', 'transcript_id', 'HGVS', 'biotype', 'exon', 'intron', 'intron_offset', 'Domain', 'domain_name', 'polyphen_prediction',
             'polyphen_score', 'consequence_terms', 'codons', 'amino_acids', 'refAA', 'protein_start', 'varAA']
     cols_present = [col for col in keep if col in vep_df.columns]
     protein_df = vep_df[cols_present].copy()
 
     # Update column names
     protein_df.rename(columns={'transcript_id': 'Transcript ID', 'gene_symbol': 'Gene Symbol', 'biotype': 'Biotype',
-                       'exon': 'Exon Rank', 'Domain': 'Pfam Domain ID', 'domain_name': 'Pfam Domain Name',
+                       'exon': 'Exon Rank', 'intron': 'Intron Rank', 'intron_offset': 'Intron Offset',
+                       'Domain': 'Pfam Domain ID', 'domain_name': 'Pfam Domain Name',
                        'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score',
                        'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'},
                        inplace=True,  errors='ignore')
@@ -348,6 +357,7 @@ def run_vep(variants, species, query=True, coding_only=True):
                           coding_only=coding_only)
 
             vep_df = parse_vep_json(run_dir / 'output.json', keep_intergenic=not coding_only)
+            vep_df = add_intron_offsets(vep_df, species)
 
         except:
             logging.error('VEP Request Failed')
@@ -360,3 +370,32 @@ def run_vep(variants, species, query=True, coding_only=True):
 
     return vep_df
 
+
+def run_vep_scorable(variants, species, query=True):
+    '''
+    Runs VEP for the variants VarLift can score: those with a coding consequence and,
+    from a second run without the coding-only filter, those in a splice site or intron.
+
+    Parameters:
+        variants: DataFrame. Contains Chromosome, Start, Ref, Alt and Submission.
+        species: str. Either 'homo_sapiens' or 'mus_musculus'.
+
+    Returns:
+        tuple. DataFrame of scorable VEP rows, and DataFrame of the second run's rows
+        (all variants without a coding consequence), or None when there were none.
+    '''
+    vep_df = run_vep(variants, species, query=query)
+
+    rest = variants[~variants['Submission'].isin(set(vep_df.get('Submission', [])))]
+    if rest.empty:
+        return vep_df, None
+
+    noncoding_df = run_vep(rest, species, query=query, coding_only=False)
+    if noncoding_df.empty or 'consequence_terms' not in noncoding_df.columns:
+        return vep_df, noncoding_df
+
+    splice_df = noncoding_df[noncoding_df['consequence_terms'].apply(scoring_class) == SPLICE]
+    if not splice_df.empty:
+        vep_df = pd.concat([vep_df, splice_df], ignore_index=True)
+
+    return vep_df, noncoding_df

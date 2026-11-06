@@ -58,6 +58,8 @@ paths:
   ensembl_mus_gff3: "app/data/Ensembl/Mus_musculus.GRCm39.{ensemble_version}.gff3.gz"
   mouse_gene_pqt: "app/data/Ensembl/mouse_gene_data.parquet"
   human_gene_pqt: "app/data/Ensembl/human_gene_data.parquet"
+  mouse_exon_pqt: "app/data/Ensembl/mouse_exon_data.parquet"
+  human_exon_pqt: "app/data/Ensembl/human_exon_data.parquet"
 
   apptainer_main: "/main"
   apptainer_cache: "/opt/vep/.vep"

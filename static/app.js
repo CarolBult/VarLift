@@ -184,9 +184,11 @@ function renderTables(name, gene) {
         queryGenes = window.fullJSON.query_genes.filter(row => row['Gene Symbol'] === gene);
         queryProteins = window.fullJSON.query_variants.filter(row => row['Name'] === name);
         outputGenes = window.fullJSON.output_genes.filter(row => row['Gene Symbol'] === homolog);
-        outputProteins = window.fullJSON.output_variants.filter(row => row['Gene Symbol'] === homolog 
-                                                                        && queryProteins.some(r => r.refAA === row.refAA)
-                                                                        && queryProteins.some(r => r.varAA === row.varAA));
+        // Coding variants match by amino-acid change, splice-site and intronic variants by intron offset
+        outputProteins = window.fullJSON.output_variants.filter(row => row['Gene Symbol'] === homolog
+                                                                        && queryProteins.some(r => r['Intron Offset']
+                                                                            ? r['Intron Offset'] === row['Intron Offset']
+                                                                            : r.refAA === row.refAA && r.varAA === row.varAA));
         scores = window.fullJSON.scores.filter(row => row['Input Name'] === name);
         phenotypes = window.fullJSON.phenotypes.filter(row => outputProteins.some(r => r.Name === row.Name));
 
@@ -353,8 +355,12 @@ function renderTables(name, gene) {
     // MP Terms Mapped/Total are diagnostics for the phenotype scores; they stay in the JSON download
     const scoreHiddenCols = ['Input Name', 'MP Terms Mapped', 'MP Terms Total'];
 
+    // Criteria that don't apply to any row, such as the coding criteria for a splice-site variant
+    const notApplicable = Object.keys(sortedScores[0] || {})
+        .filter(col => col.endsWith('Match') && sortedScores.every(row => row[col] === null));
+
     // Hide columns
-    hideColumnsByName(scoreTable, scoreHiddenCols);
+    hideColumnsByName(scoreTable, [...scoreHiddenCols, ...notApplicable]);
 
 
     // CREATE PHENOTYPE DATATABLE ELEMENT
@@ -598,6 +604,11 @@ function jsonToHTMLTable(data, tableId) {
                 value = String(value).split(', ')
                     .map(id => `<a href="https://www.informatics.jax.org/allele/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`)
                     .join(', ');
+            }
+
+            // Criteria that don't apply to the variant's scoring class
+            if (tableId === 'scoresTable' && col.endsWith('Match') && value === null) {
+                value = 'N/A';
             }
 
             // Add linking for PFAM domains
