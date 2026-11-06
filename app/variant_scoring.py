@@ -2,7 +2,8 @@
 Structural similarity scoring between a query variant and its homologous variants.
 
 Each query variant is scored by the class of its molecular consequence:
-    - Coding: amino-acid change, protein position, exon and Pfam domain.
+    - Coding: amino-acid change, protein position (through a protein alignment
+      of the two transcripts), exon and Pfam domain.
     - Splice/Intronic: intron number and the variant's offset from the nearest
       exon boundary (as in HGVS c.123+5).
 Biotype and consequence are compared for both classes. A criterion that does
@@ -10,11 +11,14 @@ not apply to the query's class, or that neither variant has a value for
 (e.g. neither is in a Pfam domain), is left as None and does not count
 towards the Total Score.
 '''
+import re
 import yaml
 import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
+
+from app.protein_alignment import homologous_position, SequenceUnavailable
 
 
 with open('app/config.yaml') as f:
@@ -130,7 +134,36 @@ def _aa_change(df, sfx):
     return [f'{r}/{v}' if pd.notna(r) else None for r, v in zip(ref, var)]
 
 
-def structural_matches(df, q, c):
+def _residue_position(amino_acids):
+    '''Residue number from a change like R145C, or None.'''
+    match = re.match(r'^[A-Z*](\d+)', amino_acids) if isinstance(amino_acids, str) else None
+    return int(match.group(1)) if match else None
+
+
+def _aligned_positions(df, q, c, q_species, c_species):
+    '''
+    For each pair, the homolog residue aligned to the query's residue and whether it is
+    the homolog's variant residue. Positions are compared by number only when the
+    protein sequences aren't available.
+    '''
+    aligned, matches = [], []
+    for q_tx, q_aa, c_tx, c_aa in zip(df[f'Transcript ID{q}'], df[f'Amino Acids{q}'],
+                                      df[f'Transcript ID{c}'], df[f'Amino Acids{c}']):
+        q_pos, c_pos = _residue_position(q_aa), _residue_position(c_aa)
+        if q_pos is None or c_pos is None:
+            aligned.append(None)
+            matches.append(_match(q_pos, c_pos))
+            continue
+        try:
+            mapped = homologous_position(q_tx, q_species, c_tx, c_species, q_pos)
+        except SequenceUnavailable:
+            mapped = q_pos
+        aligned.append(mapped)
+        matches.append(mapped == c_pos)
+    return aligned, matches
+
+
+def structural_matches(df, q, c, q_species, c_species):
     '''
     Compare each query/homolog pair in a merged DataFrame.
 
@@ -138,9 +171,11 @@ def structural_matches(df, q, c):
         df: DataFrame. One row per pair, query columns suffixed q and homolog columns suffixed c.
         q: str. Suffix of the query variant's columns.
         c: str. Suffix of the homologous variant's columns.
+        q_species, c_species: str. 'human' or 'mouse', for the query and homolog.
 
     Returns:
-        DataFrame. Scoring Class and the match columns in STRUCTURAL_COLS (True, False or None).
+        DataFrame. Scoring Class, the match columns in STRUCTURAL_COLS (True, False or None),
+        and Aligned Position: the homolog residue that aligns to the query's residue.
     '''
     def pair(col):
         return [_match(a, b) for a, b in zip(df[f'{col}{q}'], df[f'{col}{c}'])]
@@ -150,7 +185,9 @@ def structural_matches(df, q, c):
     out['Biotype Match'] = pair('Biotype')
     out['Consequence Match'] = pair('Molecular Consequence')
     out['AA Match'] = [_match(a, b) for a, b in zip(_aa_change(df, q), _aa_change(df, c))]
-    out['AA Position Match'] = pair('Amino Acids')
+    # Residue numbers differ between orthologs and isoforms, so positions are compared through a protein alignment
+    aligned, position_matches = _aligned_positions(df, q, c, q_species, c_species)
+    out['AA Position Match'] = position_matches
     out['Exon Match'] = pair('Exon Rank')
     out['Domain Match'] = pair('Pfam Domain ID')
     out['Intron Match'] = pair('Intron Rank')
@@ -162,6 +199,7 @@ def structural_matches(df, q, c):
         for col in criteria:
             out[col] = out[col].astype(object).where(~other, None)
 
+    out['Aligned Position'] = aligned
     return out.astype(object)
 
 

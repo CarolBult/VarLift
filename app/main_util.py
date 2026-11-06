@@ -363,7 +363,7 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     score_df['AlleleID'] = expanded_df['AlleleID']
     score_df['Allele Symbol'] = expanded_df['AlleleSymbol']
     score_df['Transcript ID'] = expanded_df['Transcript ID_mouse']
-    score_df = pd.concat([score_df, structural_matches(expanded_df, '_human', '_mouse')], axis=1)
+    score_df = pd.concat([score_df, structural_matches(expanded_df, '_human', '_mouse', 'human', 'mouse')], axis=1)
     score_df['Disease Match'] = expanded_df.apply(lambda r: bool(r['MONDO_set_human'] & r['MONDO_set_mouse']), axis=1)
 
     # columns which can be attributed to score
@@ -657,7 +657,7 @@ def mvar_query_score(mouse_prt_df, hum_prt_df, gene_inputs):
     score_df['Input Name'] = expanded_df['Input Name']
     score_df['Name'] = expanded_df['Name']
     score_df['Transcript ID'] = expanded_df['Transcript ID']
-    score_df = pd.concat([score_df, structural_matches(expanded_df, '_mouse', '')], axis=1)
+    score_df = pd.concat([score_df, structural_matches(expanded_df, '_mouse', '', 'mouse', 'human')], axis=1)
 
     # columns which can be attributed to score
     match_cols = STRUCTURAL_COLS

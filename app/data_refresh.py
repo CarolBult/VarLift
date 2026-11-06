@@ -1,5 +1,5 @@
 import yaml
-from data_util import download_file, parse_mondo_obo, parse_ensembl_gff3, parse_ensembl_exons, parse_ncbi_variant_summary
+from data_util import download_file, parse_mondo_obo, parse_ensembl_gff3, parse_ensembl_exons, parse_ensembl_peptides, parse_ncbi_variant_summary
 
 
 # Load Config
@@ -77,6 +77,14 @@ def refresh_ensembl():
 
     parse_ensembl_exons(out_hum, 'human')
     parse_ensembl_exons(out_mus, 'mouse')
+
+    pep_hum = config['paths']['ensembl_hum_pep'].format(ensemble_version=version)
+    pep_mus = config['paths']['ensembl_mus_pep'].format(ensemble_version=version)
+    download_file(config['data']['ensembl_hum_pep'].format(ensemble_version=version), pep_hum)
+    download_file(config['data']['ensembl_mus_pep'].format(ensemble_version=version), pep_mus)
+
+    parse_ensembl_peptides(pep_hum, 'human')
+    parse_ensembl_peptides(pep_mus, 'mouse')
 
 
 def refresh_ncbi():

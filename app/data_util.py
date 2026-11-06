@@ -145,6 +145,34 @@ def parse_ensembl_exons(gff3_path, species):
     exon_df.to_parquet(config['paths'][f'{species}_exon_pqt'], index=False)
 
 
+def parse_ensembl_peptides(pep_path, species):
+    '''
+    Parses an Ensembl peptide FASTA to extract each transcript's protein sequence and
+    saves it as a parquet file. Used to align homologous proteins so residue positions
+    can be compared across species.
+
+    Parameters:
+        pep_path. str. Path to gzipped pep.all FASTA file.
+        species. str. 'human' or 'mouse'.
+    '''
+    rows = []
+    transcript, sequence = None, []
+    with gzip.open(pep_path, 'rt') as f:
+        for line in f:
+            if line.startswith('>'):
+                if transcript:
+                    rows.append((transcript, ''.join(sequence)))
+                match = re.search(r'transcript:(\S+?)(?:\.\d+)?(?:\s|$)', line)
+                transcript, sequence = (match.group(1) if match else None), []
+            else:
+                sequence.append(line.strip())
+        if transcript:
+            rows.append((transcript, ''.join(sequence)))
+
+    protein_df = pd.DataFrame(rows, columns=['transcript_id', 'sequence']).drop_duplicates('transcript_id')
+    protein_df.to_parquet(config['paths'][f'{species}_protein_pqt'], index=False)
+
+
 def parse_ncbi_variant_summary(summary_path, output_path):
     '''
     Parses NCBI TSV file as a source of all human variants and
