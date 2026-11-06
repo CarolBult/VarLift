@@ -21,57 +21,18 @@ class NoCodingVariantsError(Exception):
 
 
 
-# ---- HUMAN QUERY ----
-def hvar_query(variants, assembly='GRCh38'):
+def human_variant_diseases(variants):
     '''
-    Annotate a batch of human variant using local gene metadata, Ensembl VEP, and ClinVar.
+    Collect ClinVar disease associations and HP terms for human variants.
 
     Parameters
+        variants: DataFrame. Expects Name, Chromosome, Start, Stop, Ref, Alt.
 
     Returns
-        gene_df: pandas.DataFrame. Gene-level metadata and input variant summary.
-        protein_df: pandas.DataFrame. Transcript-level information.
-        input_gene_df: pandas.DataFrame. Gene mapping to input.
+        DataFrame. Contains Name, Associated Diseases, MONDO and HP_IDs_variant.
     '''
-    s = time.time()
-    # Check assembly
-    if assembly != 'GRCh38':
-        logging.info(f'Assembly Error: {assembly} is not supported. Only GRCh38 is supported.')
-        raise ValueError('Assembly must be GRCh38')
-
-    # Log the query
-    log_batch_query(variants)
-    
-    # Prepare common notation names
-    variants, submission_names_map = prepare_submission(variants)
-
-
-    # Query VEP
-    vep_df = run_vep(variants, 'homo_sapiens', query=True)
-
-    if vep_df.empty:
-        raise NoCodingVariantsError('No protein-coding consequences found on GRCh38.')
-
-    # Assign input field
-    vep_df['Name'] = vep_df['Submission'].map(submission_names_map)
-
-    # Clean VEP output into protein DataFrame
-    protein_df = prepare_vep_output(vep_df)
-
-
-    # Create a human gene to input mapping DataFrame
-    input_gene_df = (protein_df[['Name', 'Gene Symbol']].drop_duplicates()
-                     .rename(columns={'Gene Symbol': 'Hum Gene',
-                                      'Name': 'Input Name'}).copy())
-
-    # Build gene table
-    genes = protein_df['Gene Symbol'].unique()
-    gene_df = fetch_gene_info(genes, species='human')
-
-
-    # Disease Associations
     from app.clinvar_summary import lookup_hp_ids, lookup_disease_ids
-    from app.hpoa import lookup_hps_for_mondo, lookup_hps_for_gene
+    from app.hpoa import lookup_hps_for_mondo
 
     disease_df = assign_clinvar(variants)
     disease_df = extract_hp_ids(disease_df)        # HP IDs embedded directly in CLNDISDB
@@ -148,6 +109,69 @@ def hvar_query(variants, assembly='GRCh38'):
     disease_df['HP_IDs_variant'] = disease_df.apply(_build_variant_hps, axis=1)
     disease_df = disease_df.drop(columns=['HP_IDs'])
 
+    return disease_df
+
+
+# ---- HUMAN QUERY ----
+def hvar_query(variants, assembly='GRCh38'):
+    '''
+    Annotate a batch of human variant using local gene metadata, Ensembl VEP, and ClinVar.
+
+    Parameters
+
+    Returns
+        gene_df: pandas.DataFrame. Gene-level metadata and input variant summary.
+        protein_df: pandas.DataFrame. Transcript-level information.
+        input_gene_df: pandas.DataFrame. Gene mapping to input.
+        unevaluated_df: pandas.DataFrame. Variants without a coding consequence.
+    '''
+    s = time.time()
+    # Check assembly
+    if assembly != 'GRCh38':
+        logging.info(f'Assembly Error: {assembly} is not supported. Only GRCh38 is supported.')
+        raise ValueError('Assembly must be GRCh38')
+
+    # Log the query
+    log_batch_query(variants)
+    
+    # Prepare common notation names
+    variants, submission_names_map = prepare_submission(variants)
+
+
+    # Query VEP
+    vep_df = run_vep(variants, 'homo_sapiens', query=True)
+
+    # Variants without a coding consequence are reported separately
+    from app.unevaluated import unevaluated_variants
+    unevaluated_df = unevaluated_variants(variants, vep_df.get('Submission', []), 'homo_sapiens')
+
+    if vep_df.empty:
+        if unevaluated_df.empty:
+            raise NoCodingVariantsError('No protein-coding consequences found on GRCh38.')
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), unevaluated_df
+
+    # Assign input field
+    vep_df['Name'] = vep_df['Submission'].map(submission_names_map)
+
+    # Clean VEP output into protein DataFrame
+    protein_df = prepare_vep_output(vep_df)
+
+
+    # Create a human gene to input mapping DataFrame
+    input_gene_df = (protein_df[['Name', 'Gene Symbol']].drop_duplicates()
+                     .rename(columns={'Gene Symbol': 'Hum Gene',
+                                      'Name': 'Input Name'}).copy())
+
+    # Build gene table
+    genes = protein_df['Gene Symbol'].unique()
+    gene_df = fetch_gene_info(genes, species='human')
+
+
+    # Disease Associations
+    from app.hpoa import lookup_hps_for_gene
+
+    disease_df = human_variant_diseases(variants)
+
     protein_df = protein_df.merge(disease_df, on='Name', how='left')
 
     # Gene-level HP terms: looked up once per unique gene symbol in protein_df
@@ -170,7 +194,7 @@ def hvar_query(variants, assembly='GRCh38'):
 
     print(f'Human Time: {e-s}')
 
-    return gene_df, protein_df, input_gene_df
+    return gene_df, protein_df, input_gene_df, unevaluated_df
 
 
 def mvar_fetch(input_gene_df, assembly='GRCm39'):
@@ -471,8 +495,22 @@ def mvar_query(variants, assembly='GRCm39'):
     # Query VEP
     vep_df = run_vep(variants, 'mus_musculus', query=True)
 
+    # Variants without a coding consequence are reported separately
+    from app.unevaluated import unevaluated_variants
+    unevaluated_df = unevaluated_variants(variants, vep_df.get('Submission', []), 'mus_musculus')
+
+    # MGI alleles at the submitted coordinates
+    from app.mouse_coverage import mgi_alleles_at, query_allele_coverage, query_other_alleles
+    alleles = mgi_alleles_at(variants)
+    submitted_ids = set(alleles['AlleleID'])
+    unevaluated_genes = set(unevaluated_df.get('Gene Symbol', pd.Series(dtype=object)).dropna())
+
     if vep_df.empty:
-        raise NoCodingVariantsError('No protein-coding consequences found on GRCm39.')
+        if unevaluated_df.empty:
+            raise NoCodingVariantsError('No protein-coding consequences found on GRCm39.')
+        allele_coverage_df = query_allele_coverage(sorted(unevaluated_genes), submitted_ids)
+        other_alleles_df = query_other_alleles(sorted(unevaluated_genes), submitted_ids)
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), unevaluated_df, allele_coverage_df, other_alleles_df
 
     # Assign input field
     vep_df['Name'] = vep_df['Submission'].map(submission_name_map)
@@ -480,6 +518,16 @@ def mvar_query(variants, assembly='GRCm39'):
 
     # Clean VEP output into protein DataFrame
     protein_df = prepare_vep_output(vep_df)
+
+
+    # Add the matching MGI alleles and their disease models to each variant
+    allele_cols = (alleles.groupby('Input Name')
+                   .agg(**{'AlleleID': ('AlleleID', ', '.join),
+                           'AlleleSymbol': ('AlleleSymbol', ', '.join),
+                           'Associated Diseases': ('Associated Diseases',
+                                                   lambda s: sorted({d for ds in s for d in ds}))})
+                   .reset_index().rename(columns={'Input Name': 'Name'}))
+    protein_df = protein_df.merge(allele_cols, on='Name', how='left')
 
 
     # Create a gene to input mapping DataFrame
@@ -510,7 +558,13 @@ def mvar_query(variants, assembly='GRCm39'):
     e = time.time()
     print(f'Mouse Time: {e-s}')
 
-    return gene_df, protein_df, input_gene_df
+    # Every disease-associated MGI allele of the queried genes, flagging the submitted ones,
+    # and the alleles with phenotypes but no disease model
+    genes = sorted(set(protein_df['Gene Symbol'].dropna()) | unevaluated_genes)
+    allele_coverage_df = query_allele_coverage(genes, submitted_ids)
+    other_alleles_df = query_other_alleles(genes, submitted_ids)
+
+    return gene_df, protein_df, input_gene_df, unevaluated_df, allele_coverage_df, other_alleles_df
 
 
 def hvar_fetch(mouse_prt_df, input_mapping_df, assembly='GRCh38'):

@@ -87,20 +87,26 @@ def run_pipeline(data):
 
     import pandas as pd
     allele_coverage_df = pd.DataFrame()
+    other_alleles_df = pd.DataFrame()
+
+    # Stay empty when none of the variants has a coding consequence
+    output_gene_df, output_prt_df, output_phenotype_df, score_df = (pd.DataFrame() for _ in range(4))
 
     if data.organism == 'human':
 
-        query_gene_df, query_prt_df, input_genes = hvar_query(variants)
-        output_gene_df, output_prt_df, output_phenotype_df, input_genes, allele_coverage_df = mvar_fetch(input_genes)        
-        score_df = hvar_query_score(query_prt_df, output_prt_df, input_genes, mouse_phenotype_df=output_phenotype_df)
-        output_phenotype_df = sort_phenotypes_by_score(output_phenotype_df, score_df)
+        query_gene_df, query_prt_df, input_genes, unevaluated_df = hvar_query(variants)
+        if not query_prt_df.empty:
+            output_gene_df, output_prt_df, output_phenotype_df, input_genes, allele_coverage_df = mvar_fetch(input_genes)
+            score_df = hvar_query_score(query_prt_df, output_prt_df, input_genes, mouse_phenotype_df=output_phenotype_df)
+            output_phenotype_df = sort_phenotypes_by_score(output_phenotype_df, score_df)
 
     if data.organism == 'mouse':
 
-        query_gene_df, query_prt_df, input_genes = mvar_query(variants)
-        output_gene_df, output_prt_df, output_phenotype_df, input_genes = hvar_fetch(query_prt_df, input_genes)
-        score_df = mvar_query_score(query_prt_df, output_prt_df, input_genes)
-        output_phenotype_df = sort_phenotypes_by_score(output_phenotype_df, score_df)
+        query_gene_df, query_prt_df, input_genes, unevaluated_df, allele_coverage_df, other_alleles_df = mvar_query(variants)
+        if not query_prt_df.empty:
+            output_gene_df, output_prt_df, output_phenotype_df, input_genes = hvar_fetch(query_prt_df, input_genes)
+            score_df = mvar_query_score(query_prt_df, output_prt_df, input_genes)
+            output_phenotype_df = sort_phenotypes_by_score(output_phenotype_df, score_df)
 
     results = {'query_genes': query_gene_df.to_dict(orient='records'),
             'query_variants': query_prt_df.to_dict(orient='records'),
@@ -109,7 +115,9 @@ def run_pipeline(data):
             'scores': score_df.to_dict(orient='records'),
             'phenotypes': output_phenotype_df.to_dict(orient='records'),
             'gene_mapping': input_genes.to_dict(orient='records'),
-            'allele_coverage': allele_coverage_df.to_dict(orient='records')}
+            'allele_coverage': allele_coverage_df.to_dict(orient='records'),
+            'unevaluated_variants': unevaluated_df.to_dict(orient='records'),
+            'other_alleles': other_alleles_df.to_dict(orient='records')}
 
     safe_result = jsonable_encoder(results)
 

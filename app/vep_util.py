@@ -139,7 +139,7 @@ def vep_input(variants, input_path):
             f.write(f'{row['Submission']}\n')
             
 
-def apptainer_vep(species, query=True, input_file='input.vcf', output_file='output.json'):
+def apptainer_vep(species, query=True, input_file='input.vcf', output_file='output.json', coding_only=True):
     '''
     Runs local VEP on input file for species.
 
@@ -147,6 +147,7 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
         species: str. Either 'homo_sapiens' or 'mus_musculus'.
         input_file: str. Input file, relative to the processing directory. Defaults to 'input.vcf'
         output_file: str. Output file, relative to the processing directory. Defaults to 'output.json'
+        coding_only: bool. Only report consequences in coding sequence. Defaults to True.
     '''
 
     host_main = os.path.expanduser('~/VarLift/app/vep')
@@ -165,8 +166,10 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
            '--domains',
            '--biotype',
            '--symbol',
-           '--numbers',
-           '--coding_only']
+           '--numbers']
+
+    if coding_only:
+        cmd += ['--coding_only']
     
     if species == 'homo_sapiens':
         cmd += ['--polyphen', 'b',
@@ -180,12 +183,14 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
     subprocess.run(cmd, check=True)
 
 
-def parse_vep_json(input_file=vep_output_file):
+def parse_vep_json(input_file=vep_output_file, keep_intergenic=False):
     '''
     Parse VEP json output (Docker output) into a DataFrame.
 
     Parameters:
         inpute_file. str. path to json for parsing.
+        keep_intergenic: bool. Keep variants with no transcript consequences as a row
+            holding only their most severe consequence. Defaults to False.
     
     Returns:
         DataFrame. VEP Output.
@@ -201,6 +206,11 @@ def parse_vep_json(input_file=vep_output_file):
             variant = json.loads(line)
 
             consequences = variant.get('transcript_consequences', [])
+            if not consequences and keep_intergenic:
+                all_dfs.append(pd.DataFrame([{'consequence_terms': [variant.get('most_severe_consequence')],
+                                              'Submission': variant.get('input')}]))
+                continue
+
             if not consequences:
                 logging.warning(f"No transcript consequences for {variant.get('input')}")
                 continue
@@ -212,7 +222,7 @@ def parse_vep_json(input_file=vep_output_file):
             keep = ['gene_symbol', 'transcript_id',
                     'polyphen_prediction', 'polyphen_score',
                     'amino_acids', 'protein_start',
-                    'consequence_terms', 'exon',
+                    'consequence_terms', 'exon', 'intron',
                     'domains', 'codons',
                     'impact', 'biotype',
                     'hgvsp', 'hgvsc']
@@ -311,13 +321,15 @@ def prepare_vep_output(vep_df):
     return protein_df
 
 
-def run_vep(variants, species, query=True):
+def run_vep(variants, species, query=True, coding_only=True):
     '''
     Runs VEP using help functions.
 
     Parameters:
         variants: DataFrame. Contains Chromosome, Start, Ref, Alt
         species: str. Either 'homo_sapiens' or 'mus_musculus'.
+        coding_only: bool. Only report consequences in coding sequence; when False,
+            variants outside any transcript are kept too. Defaults to True.
     
     Returns:
         DataFrame. VEP Output.
@@ -332,9 +344,10 @@ def run_vep(variants, species, query=True):
 
         try:
             apptainer_vep(species, query=query,
-                          input_file=f'{run_dir.name}/input.vcf', output_file=f'{run_dir.name}/output.json')
+                          input_file=f'{run_dir.name}/input.vcf', output_file=f'{run_dir.name}/output.json',
+                          coding_only=coding_only)
 
-            vep_df = parse_vep_json(run_dir / 'output.json')
+            vep_df = parse_vep_json(run_dir / 'output.json', keep_intergenic=not coding_only)
 
         except:
             logging.error('VEP Request Failed')
