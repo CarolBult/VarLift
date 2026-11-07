@@ -99,6 +99,9 @@ def fetch_gene_info(genes, species='human'):
     # Subset parquet to requested genes
     subset = pqt[pqt['Name'].isin(genes)]
 
+    # Pseudoautosomal genes (e.g. CSF2RA) are listed on both X and Y; keep the first (X)
+    subset = subset.drop_duplicates(subset='Name')
+
     # Preserve order of input genes
     subset = subset.set_index('Name').reindex(list(genes)).reset_index()
 

@@ -272,6 +272,10 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
     # Query VEP for each variant
     variant_vep, _ = run_vep_scorable(mouse_prt_df, 'mus_musculus', query=False)
 
+    if variant_vep.empty or 'consequence_terms' not in variant_vep.columns:
+        logging.info('No mouse alleles with a coding, splice-site or intronic consequence.')
+        return mouse_gene_df, pd.DataFrame(), phenotype_df, gene_input_df, pd.DataFrame()
+
     # Clean VEP output
     mouse_prt_df = prepare_vep_output(variant_vep)
 
