@@ -135,8 +135,8 @@ def _aa_change(df, sfx):
 
 
 def _residue_position(amino_acids):
-    '''Residue number from a change like R145C, or None.'''
-    match = re.match(r'^[A-Z*](\d+)', amino_acids) if isinstance(amino_acids, str) else None
+    '''Residue number from a change like R145C or RE1812X (frameshift), or None.'''
+    match = re.match(r'^[A-Z*-]+(\d+)', amino_acids) if isinstance(amino_acids, str) else None
     return int(match.group(1)) if match else None
 
 

@@ -291,7 +291,12 @@ def prepare_vep_output(vep_df):
     pos_str = vep_df['protein_start'].astype('string')
     var_str = vep_df['varAA'].astype('string')
 
-    vep_df['amino_acids'] = ref_str.str.cat(pos_str).str.cat(var_str)
+    # Frameshifts and multi-residue indels (e.g. RE/X, -/X) keep VEP's residues around
+    # the position (RE1812X), so their position can still be compared
+    multi = vep_df['amino_acids'].astype('string').str.strip().str.extract(r"^(?P<ref>[A-Z\*\-]+)/(?P<var>[A-Z\*\-]+)$")
+    multi_str = multi['ref'].str.cat(pos_str).str.cat(multi['var'])
+
+    vep_df['amino_acids'] = ref_str.str.cat(pos_str).str.cat(var_str).fillna(multi_str)
 
 
     # Merge consequence terms into a single string
