@@ -53,10 +53,14 @@ def _reason_for(consequence, is_evaluated):
     return f'Consequence not evaluable: {consequence}'
 
 
-def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids):
+def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids, all_alleles=False):
     '''
     List all disease-associated MGI alleles for a mouse gene, with a per-allele
     status indicating whether VarLift's pipeline evaluated it.
+
+    With all_alleles (human queries), alleles with variant data but no disease
+    model are listed too, since they are scored as well, and each allele's
+    phenotypes are added.
     '''
     dm = _load_disease_models()
     va = _load_variant_allele()
@@ -65,7 +69,8 @@ def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids):
             'Diseases', 'Evaluated', 'Reason']
 
     gene_rows = dm[dm['GeneSymbol'] == gene_symbol]
-    if gene_rows.empty:
+    gene_va = va[va['AlleleAssociatedGeneSymbol'] == gene_symbol] if all_alleles else va.iloc[0:0]
+    if gene_rows.empty and gene_va.empty:
         return pd.DataFrame(columns=cols)
 
     diseases_by_allele = (
@@ -74,6 +79,11 @@ def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids):
         .to_dict()
     )
     symbols_by_allele = (
+        gene_va.drop_duplicates(subset=['AlleleId'])
+        .set_index('AlleleId')['AlleleSymbol']
+        .to_dict()
+    )
+    symbols_by_allele.update(
         gene_rows.drop_duplicates(subset=['AlleleID'])
         .set_index('AlleleID')['AlleleSymbol']
         .to_dict()
@@ -87,20 +97,26 @@ def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids):
 
     evaluated_set = set(evaluated_allele_ids or [])
     rows = []
-    for aid in sorted(diseases_by_allele.keys()):
+    for aid in sorted(symbols_by_allele.keys()):
         symbol = symbols_by_allele.get(aid, '')
         consequence = _unique_consequences(va_by_allele.get(aid, ''))
         is_evaluated = aid in evaluated_set
         rows.append({
             'Gene Symbol': gene_symbol,
             'AlleleID': aid,
-            'AlleleSymbol': re.sub(r'<([^>]+)>', r'<sup>\1</sup>', symbol) if isinstance(symbol, str) else symbol,
+            # Disease-model symbols use <...>; VARIANT-ALLELE-MGI's already have <sup> tags
+            'AlleleSymbol': re.sub(r'<([^>]+)>', r'<sup>\1</sup>', symbol) if isinstance(symbol, str) and '<sup>' not in symbol else symbol,
             'Consequence': consequence,
-            'Diseases': diseases_by_allele[aid],
+            'Diseases': diseases_by_allele.get(aid, []),
             'Evaluated': is_evaluated,
             'Reason': _reason_for(consequence, is_evaluated),
         })
-    return pd.DataFrame(rows, columns=cols)
+    coverage = pd.DataFrame(rows, columns=cols)
+
+    if all_alleles:
+        phenotypes = MGI_phenotype_df['Phenotypes'].str.split('|').to_dict()
+        coverage['Phenotypes'] = coverage['AlleleID'].map(lambda a: phenotypes.get(a, []))
+    return coverage
 
 
 def mgi_alleles_at(variants):

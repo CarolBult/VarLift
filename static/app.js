@@ -1,3 +1,15 @@
+// Results tables start with 5 rows; a "Rows per page" menu beside the pager shows
+// more (or all). The rows scroll in a box beneath a frozen header row (see
+// .tableScroll and .tableFooter in styles.css).
+// The not-evaluated tables set their own dom and keep their single page.
+$.extend(true, $.fn.dataTable.defaults, {
+    dom: '<"tableScroll"t><"tableFooter"ilp>',
+    pageLength: 5,
+    lengthMenu: [[5, 10, 25, 50, -1], [5, 10, 25, 50, 'All']],
+    language: {lengthMenu: 'Rows per page: _MENU_'}
+});
+
+
 // Clicking an example adds it to the input box and selects its organism.
 // Variants of the other organism can't be run together, so they are replaced.
 document.querySelectorAll('.exampleVariant').forEach(function (example) {
@@ -170,21 +182,10 @@ function renderTables(name, gene) {
         outputGenes = window.fullJSON.output_genes.filter(row => row['Gene Symbol'] === homolog);
         outputProteins = window.fullJSON.output_variants.filter(row => row['Gene Symbol'] === homolog);
         scores = window.fullJSON.scores.filter(row => row['Input Name'] === name);
-        phenotypes = window.fullJSON.phenotypes.filter(row => row['Gene Symbol'] === homolog);
+        // The coverage table lists every allele of the homolog with its phenotypes,
+        // shown in dropdowns, so human queries need no separate phenotype table
         alleleCoverage = (window.fullJSON.allele_coverage || []).filter(row => row['Gene Symbol'] === homolog);
-
-        // Phenotypes move into the coverage table's dropdowns; the separate
-        // table keeps only alleles that are not in the coverage table
-        phenotypesByAllele = new Map();
-        phenotypes.forEach(row => {
-            if (!phenotypesByAllele.has(row['AlleleID'])) phenotypesByAllele.set(row['AlleleID'], row);
-        });
-        const coverageIds = new Set(alleleCoverage.map(row => row['AlleleID']));
-        phenotypes = [...phenotypesByAllele.values()].filter(row => !coverageIds.has(row['AlleleID']));
-        alleleCoverage = alleleCoverage.map(row => ({
-            ...row,
-            Phenotypes: phenotypesByAllele.get(row['AlleleID'])?.Phenotypes || []
-        }));
+        phenotypesByAllele = new Map(alleleCoverage.map(row => [row['AlleleID'], row]));
 
         // Sort output proteins and score dataframes
         sortedScores = groupedScoreSort(scores);
@@ -235,11 +236,8 @@ function renderTables(name, gene) {
 
 
 
-    // On human queries, mouse alleles outside the coverage table get their own phenotype table
-    const otherAlleles = org === 'human' && alleleCoverage.length > 0;
-
     // Query variant fields that are not shown (MONDO_set only on human queries)
-    const queryVariantHidden = ['Name', 'Submission', 'Gene Symbol', 'refAA', 'protein_start', 'varAA',
+    const queryVariantHidden = ['Name', 'Submission', 'Gene Symbol', 'Biotype', 'refAA', 'protein_start', 'varAA',
                                 ...(org === 'human' ? ['MONDO_set'] : [])];
 
     // Create HTML tables
@@ -270,7 +268,7 @@ function renderTables(name, gene) {
 
         ${org === 'mouse' ? otherAllelesSection(otherMouseAlleles, gene) : ''}
 
-        ${otherAlleles ? otherAllelesSection(phenotypes, homolog) : `
+        ${org === 'human' ? '' : `
         <div class='tableWrapper'>
             <h2>${targetOrganism} Phenotypes</h2>
             ${jsonToHTMLTable(phenotypes, "phenotypeTable")}
@@ -291,8 +289,6 @@ function renderTables(name, gene) {
 
     // CREATE OUTPUT VARIANT DATATABLE ELEMENT
     const outputVariantTable = $('#outputVariantTable').DataTable({
-        dom: 'tp',
-        pageLength: 20,
         ordering: false
     });
 
@@ -301,6 +297,7 @@ function renderTables(name, gene) {
                     'Submission',
                     'Input Name',
                     'Gene Symbol',
+                    'Biotype',
                     'refAA',
                     'varAA'
                 ];
@@ -325,8 +322,6 @@ function renderTables(name, gene) {
 
     // CREATE SCORE DATATABLE ELEMENT
     const scoreTable = $('#scoresTable').DataTable({
-        dom: 'tp',
-        pageLength: 20,
         ordering: false
     });
 
@@ -344,14 +339,12 @@ function renderTables(name, gene) {
 
     // CREATE PHENOTYPE DATATABLE ELEMENT
     $('#phenotypeTable').DataTable({
-        dom: 'tp',
-        pageLength: 20,
         ordering: false
     });
 
 
     initCoverageTable(phenotypesByAllele);
-    initOtherAllelesTable(otherAlleles ? phenotypes : otherMouseAlleles);
+    initOtherAllelesTable(org === 'mouse' ? otherMouseAlleles : []);
 
 }
 
@@ -389,8 +382,6 @@ function initOtherAllelesTable(otherAlleles) {
     if (table.length === 0) return;
 
     const otherAlleleTable = table.DataTable({
-        dom: 'tp',
-        pageLength: 20,
         ordering: false
     });
 
@@ -424,10 +415,11 @@ function coverageSection(alleleCoverage, gene, org) {
     let summary;
 
     if (total === 0) {
-        summary = 'No disease-associated mouse alleles found in MGI.';
+        summary = org === 'human' ? 'No mouse alleles found in MGI.' : 'No disease-associated mouse alleles found in MGI.';
     } else if (org === 'human') {
         const evaluated = alleleCoverage.filter(r => r.Evaluated).length;
-        summary = `VarLift evaluated <strong>${evaluated} of ${total}</strong> disease-associated ${gene} alleles in MGI. ${total - evaluated} ${total - evaluated === 1 ? 'allele exists' : 'alleles exist'} but could not be cross-mapped (see table for reasons).`;
+        const withDisease = alleleCoverage.filter(r => r.Diseases && r.Diseases.length > 0).length;
+        summary = `VarLift evaluated <strong>${evaluated} of ${total}</strong> ${gene} alleles in MGI (${withDisease} with a disease association). ${total - evaluated} ${total - evaluated === 1 ? 'allele exists' : 'alleles exist'} but could not be cross-mapped (see table for reasons).`;
     } else {
         const submitted = alleleCoverage.filter(r => r.Evaluated).map(r => r.AlleleSymbol);
         summary = `MGI has <strong>${total}</strong> disease-associated ${gene} ${total === 1 ? 'allele' : 'alleles'}. ${submitted.length > 0
@@ -452,8 +444,6 @@ function initCoverageTable(phenotypesByAllele) {
     const headers = table.find('thead th').map((i, th) => $(th).text().trim()).get();
 
     const alleleCoverageTable = table.DataTable({
-        dom: 'tp',
-        pageLength: 20,
         ordering: true,
         order: [[headers.indexOf('Evaluated'), 'desc'], [headers.indexOf('AlleleSymbol'), 'asc']],
         columnDefs: [{ targets: headers.indexOf('Phenotypes'), orderable: false }]
@@ -486,7 +476,8 @@ function renderUnevaluated(name) {
         .filter(row => !isEmpty(row['Phenotypes']) && !listed.has(row['AlleleID']))
         .map(row => ({AlleleID: row['AlleleID'], AlleleSymbol: row['AlleleSymbol'], Phenotypes: row['Phenotypes']}));
 
-    const rows = matches.map(({Phenotypes, ...row}) => ({
+    // Biotype is a gene property, shown only in the Genes table
+    const rows = matches.map(({Phenotypes, Biotype, ...row}) => ({
         ...row,
         'Associated Diseases': isEmpty(row['Associated Diseases']) ? 'None reported' : row['Associated Diseases']
     }));
@@ -586,6 +577,18 @@ function jsonToHTMLTable(data, tableId) {
 }
 
 
+// Link for a MONDO disease ID, to its Monarch Initiative page
+function mondoLink(id) {
+    return `<a href="https://monarchinitiative.org/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`;
+}
+
+
+// Link for an HPO term ID
+function hpLink(id) {
+    return `<a href="https://hpo.jax.org/browse/term/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`;
+}
+
+
 // Link for a gene accession: MGI IDs to MGI, HGNC IDs to HGNC
 function accessionLink(id) {
     if (!id) return '';
@@ -627,6 +630,16 @@ function variantFields(row) {
     if (row['AlleleID'] && row['AlleleSymbol']) {
         out['AlleleSymbol'] = `${row['AlleleSymbol']} (${formatCell(row, 'AlleleID')})`;
         delete out['AlleleID'];
+    }
+
+    // Human variants: each disease with its linked MONDO ID in parentheses. The lists
+    // pair up when they come from ClinVar's CLNDISDB; diseases backfilled from
+    // variant_summary also include OMIM/Orphanet names, so those keep a MONDO row
+    const diseases = row['Associated Diseases'];
+    const mondos = row['MONDO'];
+    if (Array.isArray(diseases) && Array.isArray(mondos) && diseases.length > 0 && diseases.length === mondos.length) {
+        out['Associated Diseases'] = diseases.map((name, i) => `${name} (${mondoLink(mondos[i])})`).join('<br>');
+        delete out['MONDO'];
     }
 
     const match = String(row['Name'] || '').match(/^([^:]+):(\d+)-(\d+):([^/]+)\/(.+)$/);
@@ -683,6 +696,23 @@ function formatCell(row, col, tableId, org) {
     // Seperate Phenotypes into multiple lines
     else if (col === 'Phenotypes' && Array.isArray(value)) {
         value = phenotypeLinks(value);
+    }
+
+    // HP term lists open in a dropdown
+    else if (['HP_IDs_variant', 'HP_IDs_gene'].includes(col) && Array.isArray(value)) {
+        const count = value.length;
+        value = count === 0 ? 'None' : `<details class="termDropdown"><summary>${count} HP term${count === 1 ? '' : 's'}</summary>`
+            + `<div class="phenotypeList">${value.map(hpLink).join('<br>')}</div></details>`;
+    }
+
+    // MONDO IDs link to their disease pages
+    else if (col === 'MONDO' && Array.isArray(value)) {
+        value = value.map(mondoLink).join(', ');
+    }
+
+    // Coverage alleles without a disease model
+    else if (col === 'Diseases' && tableId === 'alleleCoverageTable' && Array.isArray(value) && value.length === 0) {
+        value = 'No disease association';
     }
 
     // Other lists (HP IDs, MONDO IDs, diseases) get spaces so they can wrap

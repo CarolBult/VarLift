@@ -276,6 +276,81 @@ table.dataTable tbody tr:hover {
     overflow-x: auto;
 }
 
+/* TABLE SCROLL BOX: rows scroll beneath a frozen header row */
+.tableScroll {
+    clear: both;
+    max-height: 70vh;
+    overflow: auto;
+}
+
+.tableScroll table.dataTable thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+/* Bottom bar: "Showing 1 to 5 of 85", Rows per page menu, pager */
+.tableFooter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 24px;
+    padding-top: 8px;
+}
+
+.tableFooter .dataTables_info,
+.tableFooter .dataTables_length,
+.tableFooter .dataTables_paginate {
+    float: none;
+    padding-top: 0;
+    font-size: 14px;
+}
+
+.tableFooter .dataTables_paginate {
+    margin-left: auto;
+}
+
+.tableFooter .dataTables_length select {
+    font-size: 14px;
+    padding: 3px 6px;
+    margin-left: 4px;
+    border: 1px solid #587da1;
+    border-radius: 4px;
+    color: #1C2A66;
+    background: #ffffff;
+}
+
+/* TERM DROPDOWNS (HP terms in the variant field list), styled like the phenotype toggles */
+details.termDropdown summary {
+    display: inline-block;
+    padding: 4px 8px;
+    color: #1C2A66;
+    border: 1px solid #c9d0e3;
+    border-radius: 4px;
+    cursor: pointer;
+    list-style: none;
+}
+
+details.termDropdown summary::-webkit-details-marker {
+    display: none;
+}
+
+details.termDropdown summary::before {
+    content: '\25B8\00A0';
+}
+
+details.termDropdown[open] summary::before {
+    content: '\25BE\00A0';
+}
+
+details.termDropdown summary:hover {
+    background: #eef1f8;
+}
+
+details.termDropdown .phenotypeList {
+    columns: 4;
+}
+
 /* FIELD / VALUE TABLES (single-record results) */
 table.fieldTable {
     font-size: 14px;

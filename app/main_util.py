@@ -249,20 +249,9 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
     phenotype_df = allele_phenotype_match(mouse_allele_df)
 
 
-    # Query MGD for ontology associations
-    try:
-        doid_map = fetch_mus_doid(mouse_prt_df['AlleleID'].unique())
-    except:
-        logging.info('No Alleles found with disease associations.')
-        return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df, pd.DataFrame()
-
-    # Drop alleles without disease associations
-    mouse_prt_df = mouse_prt_df[mouse_prt_df['AlleleID'].isin(doid_map.keys())]
-
-
-    if mouse_prt_df.empty:
-        logging.info('No disease associated mouse alleles found.')
-        return mouse_gene_df, mouse_prt_df, pd.DataFrame(), gene_input_df, pd.DataFrame()
+    # Query MGD for ontology associations. Alleles without a disease model are
+    # still scored: the human variant may match an allele no disease is annotated to
+    doid_map = fetch_mus_doid(mouse_prt_df['AlleleID'].unique())
 
     # Prepare common notation names
     mouse_prt_df, _ = prepare_submission(mouse_prt_df)
@@ -293,11 +282,11 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
 
 
     # Compute MONDO mapping
-    mondo_id_map, mondo_term_map = map_doids_to_mondo(doid_map)
+    mondo_id_map, mondo_term_map = map_doids_to_mondo(doid_map) if doid_map else ({}, {})
 
-    # Insert into the variant df
-    mouse_prt_df['MONDO'] = mouse_prt_df['AlleleID'].map(mondo_id_map)
-    mouse_prt_df['Associated Diseases'] = mouse_prt_df['AlleleID'].map(mondo_term_map)
+    # Insert into the variant df (empty lists for alleles without a disease model)
+    mouse_prt_df['MONDO'] = mouse_prt_df['AlleleID'].map(lambda a: mondo_id_map.get(a, []))
+    mouse_prt_df['Associated Diseases'] = mouse_prt_df['AlleleID'].map(lambda a: mondo_term_map.get(a, []))
 
 
     # Rearrange columns
@@ -326,13 +315,13 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
     e = time.time()
     print(f'Mouse Time: {e-s}')
 
-    # Allele coverage: full list of disease-associated MGI alleles for each
-    # output gene, flagging which VarLift could evaluate
+    # Allele coverage: every MGI allele of each output gene (disease models and
+    # alleles with variant data), flagging which VarLift could evaluate
     from app.mouse_coverage import allele_coverage_for_gene
     evaluated_ids = set(mouse_prt_df['AlleleID'].unique())
     coverage_frames = []
     for gene in mouse_gene_df['Gene Symbol'].dropna().unique():
-        coverage_frames.append(allele_coverage_for_gene(gene, evaluated_ids))
+        coverage_frames.append(allele_coverage_for_gene(gene, evaluated_ids, all_alleles=True))
     allele_coverage_df = pd.concat(coverage_frames, ignore_index=True) if coverage_frames else pd.DataFrame()
 
     return mouse_gene_df, mouse_prt_df, phenotype_df, gene_input_df, allele_coverage_df
@@ -368,7 +357,9 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     score_df['Allele Symbol'] = expanded_df['AlleleSymbol']
     score_df['Transcript ID'] = expanded_df['Transcript ID_mouse']
     score_df = pd.concat([score_df, structural_matches(expanded_df, '_human', '_mouse', 'human', 'mouse')], axis=1)
-    score_df['Disease Match'] = expanded_df.apply(lambda r: bool(r['MONDO_set_human'] & r['MONDO_set_mouse']), axis=1)
+    # Mouse alleles without a disease model leave Disease Match out of the Total Score (None)
+    score_df['Disease Match'] = expanded_df.apply(
+        lambda r: bool(r['MONDO_set_human'] & r['MONDO_set_mouse']) if r['MONDO_set_mouse'] else None, axis=1)
 
     # columns which can be attributed to score
     match_cols = STRUCTURAL_COLS + ['Disease Match']
