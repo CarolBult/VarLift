@@ -39,7 +39,8 @@ def assign_clinvar(variants):
         variants: DataFrame. Expects Name, Chromosome, Start, Stop, Ref, Alt.
     
     Returns:
-        DataFrame. Contains Name and CLINDISDB.
+        DataFrame. Contains Name, CLNDISDB and ClinVar AlleleIDs (the ALLELEIDs of the
+        ClinVar records with the variant's exact ref/alt).
     '''
     results = []
 
@@ -56,7 +57,8 @@ def assign_clinvar(variants):
         if key not in cache:
             cache[key] = search_clinvar(chrom, start, stop, ref, alt)
 
-        results.append({'Name': hgvs_list[idx], 'CLNDISDB': cache[key]})
+        diseases, allele_ids = cache[key]
+        results.append({'Name': hgvs_list[idx], 'CLNDISDB': diseases, 'ClinVar AlleleIDs': allele_ids})
 
     return pd.DataFrame(results)
 
@@ -72,17 +74,23 @@ def search_clinvar(chrom, start, end, ref, alt):
         alt: string. Alternate allele.
     
     Returns:
-        list. containing: chromosome, start, end, ref, alt, diseases
+        tuple. CLNDISDB entries (a list of ID lists, one per disease, or None) and the
+        ALLELEIDs of the matching records (empty if the variant isn't in ClinVar).
     '''
     # Craft region string
     region = f'{chrom}:{start}-{end}'
     diseases = None
+    allele_ids = []
 
     try:
         # Filter by region and search for variants
         with clinvar_lock:
             for record in clinvar_vcf(region):
                 if record.REF == ref and alt in record.ALT:
+
+                    # Identifies the record in variant_summary
+                    if record.INFO.get('ALLELEID') is not None:
+                        allele_ids.append(int(record.INFO.get('ALLELEID')))
 
                     # Extract disease names
                     disease_info = record.INFO.get('CLNDISDB')
@@ -94,7 +102,7 @@ def search_clinvar(chrom, start, end, ref, alt):
     except Exception as e:
         logging.warning(f'ClinVar search failed for {region}: {e}')
             
-    return diseases
+    return diseases, allele_ids
 
 
 def fetch_mus_doid(allele_ids):
@@ -135,9 +143,14 @@ def map_doids_to_mondo(doid_map):
     df['MONDO'] = df['DOID'].map(mondo_xref_map)
     df['Disease Association'] = df['MONDO'].map(mondo_term_map)
 
-    # Collapse back to allele level
-    mondo_by_allele = df.groupby('AlleleID')['MONDO'].apply(lambda s: sorted(set(s.dropna())))
-    term_by_allele  = df.groupby('AlleleID')['Disease Association'].apply(lambda s: sorted(set(s.dropna())))
+    # Collapse back to allele level, keeping the two lists in step (the i-th term names
+    # the i-th MONDO ID), sorted by term
+    pairs = (df.dropna(subset=['MONDO'])
+             .assign(**{'Disease Association': lambda d: d['Disease Association'].fillna(d['MONDO'])})
+             .drop_duplicates(subset=['AlleleID', 'MONDO'])
+             .sort_values(['AlleleID', 'Disease Association']))
+    mondo_by_allele = pairs.groupby('AlleleID')['MONDO'].apply(list)
+    term_by_allele  = pairs.groupby('AlleleID')['Disease Association'].apply(list)
 
     return mondo_by_allele.to_dict(), term_by_allele.to_dict()
 

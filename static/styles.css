@@ -93,7 +93,8 @@ button:active {
 .searchContainer {
     background-color: #d3e2f1;
     outline: 2px solid #587da1;
-    flex: 0 1 560px;
+    flex: 0 0 auto;
+    max-width: 100%;
     height: auto;
     padding: 10px;
     box-sizing: border-box;
@@ -106,7 +107,9 @@ button:active {
 
 /* RESULTS PANEL: variant buttons; clicking one jumps down to its tables */
 #resultsPanel {
-    flex: 1 1 300px;
+    /* Takes the space beside the input box, but no wider than its buttons need */
+    flex: 1 1 280px;
+    max-width: max-content;
     background: #f6f8fc;
     outline: 2px solid #587da1;
     padding: 10px 15px;
@@ -149,6 +152,14 @@ button:active {
 .exampleList li {
     margin: 0;
     padding: 0;
+    white-space: nowrap;
+}
+
+/* Let the examples wrap on narrow screens */
+@media (max-width: 700px) {
+    .exampleList li {
+        white-space: normal;
+    }
 }
 
 .exampleSpecies {

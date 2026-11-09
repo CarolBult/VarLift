@@ -39,28 +39,31 @@ def human_variant_diseases(variants):
     disease_df = extract_hp_ids(disease_df)        # HP IDs embedded directly in CLNDISDB
     disease_df = clndisdb_to_mondo(disease_df)     # resolves MONDO list per variant
 
+    # The variant's own ClinVar records (exact ref/alt match in the VCF); variant_summary
+    # is read for these records only, never for other changes at the same position
+    allele_ids = dict(zip(disease_df['Name'], disease_df['ClinVar AlleleIDs']))
+
     # Variant-level HP terms: union of
     #   - direct HP cross-refs in CLNDISDB (extract_hp_ids result)
-    #   - HPs from variant_summary.tsv's PhenotypeIDS column (richer, by chrom/pos)
+    #   - HPs from variant_summary.tsv's PhenotypeIDS column (richer)
     #   - HPs looked up by MONDO disease via phenotype.hpoa
     coord_to_vs_hp = {}
     for _, v in variants.iterrows():
-        hps = lookup_hp_ids(v['Chromosome'], v['Start'])
+        hps = lookup_hp_ids(v['Chromosome'], v['Start'], allele_ids.get(v['Name'], []))
         if hps:
             coord_to_vs_hp[v['Name']] = hps
 
     # Pre-fetch disease IDs from variant_summary.tsv for each input variant
     coord_to_vs_diseases = {}
     for _, v in variants.iterrows():
-        dids = lookup_disease_ids(v['Chromosome'], v['Start'])
+        dids = lookup_disease_ids(v['Chromosome'], v['Start'], allele_ids.get(v['Name'], []))
         if dids:
             coord_to_vs_diseases[v['Name']] = dids
 
-    # Backfill Associated Diseases and MONDO from variant_summary.tsv when
-    # ClinVar's VCF (CLNDISDB) didn't yield any disease associations. Many
-    # protein-level ClinVar records are absent from the VCF but still carry
-    # disease cross-references in variant_summary.tsv.
-    from app.hpoa import lookup_name_for_disease
+    # Backfill Associated Diseases and MONDO from variant_summary.tsv when ClinVar's
+    # VCF (CLNDISDB) didn't yield any MONDO disease associations: the same records'
+    # variant_summary rows also list traits the VCF leaves out (e.g. somatic ones)
+    from app.disease_util import mondo_xref_map, mondo_term_map
 
     def _backfill(row):
         if row.get('MONDO') and len(row['MONDO']) > 0:
@@ -68,22 +71,16 @@ def human_variant_diseases(variants):
         dids = coord_to_vs_diseases.get(row['Name'], [])
         if not dids:
             return row
-        mondos = sorted({d for d in dids if d.startswith('MONDO:')})
-        # Build names: prefer MONDO names via OMIM/Orphanet from hpoa
-        names = []
-        seen_names = set()
-        for d in dids:
-            n = lookup_name_for_disease(d)
-            if n and n not in seen_names:
-                names.append(n)
-                seen_names.add(n)
-        row['MONDO'] = mondos
-        row['Associated Diseases'] = names
+        # OMIM and Orphanet IDs resolve to MONDO, so each disease is named once,
+        # by its MONDO term, and the two lists stay in step as with CLNDISDB
+        mondos = {d if d.startswith('MONDO:') else mondo_xref_map.get(d) for d in dids} - {None}
+        pairs = sorted((mondo_term_map.get(m, m), m) for m in mondos)
+        row['MONDO'] = [m for _, m in pairs]
+        row['Associated Diseases'] = [name for name, _ in pairs]
         return row
 
     disease_df = disease_df.apply(_backfill, axis=1)
-
-
+    disease_df = disease_df.drop(columns=['ClinVar AlleleIDs'])
 
 
     def _build_variant_hps(row):
@@ -513,10 +510,14 @@ def mvar_query(variants, assembly='GRCm39'):
     # Add the matching MGI alleles and their disease models to each variant
     allele_cols = (alleles.groupby('Input Name')
                    .agg(**{'AlleleID': ('AlleleID', ', '.join),
-                           'AlleleSymbol': ('AlleleSymbol', ', '.join),
-                           'Associated Diseases': ('Associated Diseases',
-                                                   lambda s: sorted({d for ds in s for d in ds}))})
+                           'AlleleSymbol': ('AlleleSymbol', ', '.join)})
                    .reset_index().rename(columns={'Input Name': 'Name'}))
+
+    # Disease models of all the matched alleles, as (term, MONDO ID) pairs kept in step
+    disease_pairs = alleles.groupby('Input Name').apply(
+        lambda g: sorted({p for ds, ms in zip(g['Associated Diseases'], g['MONDO']) for p in zip(ds, ms)}))
+    allele_cols['Associated Diseases'] = allele_cols['Name'].map(lambda n: [d for d, _ in disease_pairs.get(n, [])])
+    allele_cols['MONDO'] = allele_cols['Name'].map(lambda n: [m for _, m in disease_pairs.get(n, [])])
     protein_df = protein_df.merge(allele_cols, on='Name', how='left')
 
 
@@ -597,7 +598,7 @@ def hvar_fetch(mouse_prt_df, input_mapping_df, assembly='GRCh38'):
 
     # Disease Associations
     disease_df = assign_clinvar(variants)
-    disease_df = clndisdb_to_mondo(disease_df)
+    disease_df = clndisdb_to_mondo(disease_df).drop(columns=['ClinVar AlleleIDs'])
     hum_protein_df = hum_protein_df.merge(disease_df, on='Name', how='left')
 
     hum_gene_df = hum_gene_df.where(pd.notnull(hum_gene_df), None)

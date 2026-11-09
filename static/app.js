@@ -266,11 +266,11 @@ function renderTables(name, gene) {
 
         <div class='tableWrapper'>
             <h2>${targetOrganism} Variants</h2>
-            ${jsonToHTMLTable(sortedOutputProteins, "outputVariantTable")}
+            ${jsonToHTMLTable(sortedOutputProteins.map(displayFields), "outputVariantTable")}
         </div>
 
         <div class='tableWrapper'>
-            <h2>Similarity Scores</h2>
+            <h2>Variant Equivalency Scoring</h2>
             ${jsonToHTMLTable(sortedScores, "scoresTable")}
         </div>
 
@@ -336,7 +336,8 @@ function renderTables(name, gene) {
 
     // Columns that are be hidden by default
     // MP Terms Mapped/Total are diagnostics for the phenotype scores; they stay in the JSON download
-    const scoreHiddenCols = ['Input Name', 'MP Terms Mapped', 'MP Terms Total'];
+    // AlleleID is linked from the Allele Symbol instead
+    const scoreHiddenCols = ['Input Name', 'AlleleID', 'MP Terms Mapped', 'MP Terms Total'];
 
     // Criteria that don't apply to any row, such as the coding criteria for a splice-site variant
     const notApplicable = Object.keys(sortedScores[0] || {})
@@ -451,7 +452,7 @@ function renderUnevaluated(name) {
         .map(row => ({AlleleID: row['AlleleID'], AlleleSymbol: row['AlleleSymbol'], Phenotypes: row['Phenotypes']}));
 
     // Biotype is a gene property, shown only in the Genes table
-    const rows = matches.map(({Phenotypes, Biotype, ...row}) => ({
+    const rows = matches.map(({Phenotypes, Biotype, ...row}) => displayFields({
         ...row,
         'Associated Diseases': isEmpty(row['Associated Diseases']) ? 'None reported' : row['Associated Diseases']
     }));
@@ -603,24 +604,42 @@ function variantFields(row) {
         delete out['AlleleID'];
     }
 
-    // Human variants: each disease with its linked MONDO ID in parentheses. The lists
-    // pair up when they come from ClinVar's CLNDISDB; diseases backfilled from
-    // variant_summary also include OMIM/Orphanet names, so those keep a MONDO row
-    const diseases = row['Associated Diseases'];
-    const mondos = row['MONDO'];
-    if (Array.isArray(diseases) && Array.isArray(mondos) && diseases.length > 0 && diseases.length === mondos.length) {
-        out['Associated Diseases'] = diseases.map((name, i) => `${name} (${mondoLink(mondos[i])})`).join('<br>');
-        delete out['MONDO'];
-    }
-
     const match = String(row['Name'] || '').match(/^([^:]+):(\d+)-(\d+):([^/]+)\/(.+)$/);
-    if (!match) return out;
+    if (!match) return displayFields(out);
 
     const [, chrom, start, end, ref, alt] = match;
     const position = start === end
         ? Number(start).toLocaleString('en-US')
         : `${Number(start).toLocaleString('en-US')}-${Number(end).toLocaleString('en-US')}`;
-    return {'Genome Location': `Chr ${chrom}:${position} ${ref}>${alt}`, ...out};
+    return displayFields({'Genome Location': `Chr ${chrom}:${position} ${ref}>${alt}`, ...out});
+}
+
+
+// Display names for variant columns
+const DISPLAY_NAMES = {
+    'Exon Rank': 'Exon',
+    'Intron Rank': 'Intron',
+    'Amino Acids': 'Amino Acid Change',
+    'Associated Diseases': 'Associated Diseases (MONDO ID)'
+};
+
+// Variant row for display: columns renamed as in DISPLAY_NAMES, and each disease
+// followed by its linked MONDO ID in parentheses (the server keeps the two lists in
+// step); the separate MONDO column is dropped
+function displayFields(row) {
+    const diseases = row['Associated Diseases'];
+    const mondos = row['MONDO'];
+    const paired = Array.isArray(diseases) && Array.isArray(mondos) && diseases.length === mondos.length;
+
+    const out = {};
+    Object.entries(row).forEach(([col, value]) => {
+        if (col === 'MONDO' && paired) return;
+        if (col === 'Associated Diseases' && paired) {
+            value = diseases.map((name, i) => `${name} (${mondoLink(mondos[i])})`).join('<br>');
+        }
+        out[DISPLAY_NAMES[col] || col] = value;
+    });
+    return out;
 }
 
 
@@ -697,6 +716,11 @@ function formatCell(row, col, tableId, org) {
         value = String(value).split(', ')
             .map(id => `<a href="https://www.informatics.jax.org/allele/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`)
             .join(', ');
+    }
+
+    // Score rows link the allele symbol to its MGI allele page (the AlleleID column is hidden)
+    if (col === 'Allele Symbol' && tableId === 'scoresTable' && row['AlleleID'] && value) {
+        value = `<a href="https://www.informatics.jax.org/allele/${row['AlleleID']}" target="_blank" rel="noopener noreferrer">${value}</a>`;
     }
 
     // Criteria that don't apply to the variant's scoring class

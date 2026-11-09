@@ -11,7 +11,7 @@ import pandas as pd
 import re
 
 from app.gene_util import mus_alleles_df
-from app.disease_util import MGI_disease_df
+from app.disease_util import MGI_disease_df, fetch_mus_doid, map_doids_to_mondo
 from app.phenotype_util import MGI_phenotype_df
 
 
@@ -139,9 +139,11 @@ def mgi_alleles_at(variants):
     matched = matched[['Name', 'AlleleId', 'AlleleSymbol']].drop_duplicates()
     matched = matched.rename(columns={'Name': 'Input Name', 'AlleleId': 'AlleleID'})
 
-    diseases = (MGI_disease_df.dropna(subset=['AlleleID'])
-                .groupby('AlleleID')['DOterm'].apply(lambda s: sorted(set(s.dropna()))).to_dict())
-    matched['Associated Diseases'] = matched['AlleleID'].map(lambda a: diseases.get(a, []))
+    # Disease models as MONDO terms with their IDs, as for the alleles scored against human variants
+    doid_map = fetch_mus_doid(matched['AlleleID'].unique())
+    mondo_ids, mondo_terms = map_doids_to_mondo(doid_map) if doid_map else ({}, {})
+    matched['Associated Diseases'] = matched['AlleleID'].map(lambda a: mondo_terms.get(a, []))
+    matched['MONDO'] = matched['AlleleID'].map(lambda a: mondo_ids.get(a, []))
 
     phenotypes = MGI_phenotype_df['Phenotypes'].str.split('|').to_dict()
     matched['Phenotypes'] = matched['AlleleID'].map(lambda a: phenotypes.get(a, []))
