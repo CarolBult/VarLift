@@ -1,3 +1,21 @@
+// Clicking an example adds it to the input box and selects its organism.
+// Variants of the other organism can't be run together, so they are replaced.
+document.querySelectorAll('.exampleVariant').forEach(function (example) {
+    example.addEventListener('click', function () {
+        const input = document.getElementById('variantInput');
+        const organism = document.getElementById('queryOrganism');
+        const current = input.value.trim();
+
+        if (!current || organism.value !== example.dataset.organism) {
+            input.value = example.dataset.variant;
+        } else if (!current.split('\n').map(s => s.trim()).includes(example.dataset.variant)) {
+            input.value = current + '\n' + example.dataset.variant;
+        }
+        organism.value = example.dataset.organism;
+        input.focus();
+    });
+});
+
 // Run variant-model mapping for submitted variants on click.
 document.getElementById('runButton').addEventListener('click', function () {
     const vars = document.getElementById('variantInput').value;
@@ -22,8 +40,12 @@ document.getElementById('runButton').addEventListener('click', function () {
         // store full results
         window.fullJSON = data;
 
-        // build sidebar
-        buildSidebar(data);
+        // build sidebar; a failure here is in the page, not the analysis
+        try {
+            buildSidebar(data);
+        } catch (err) {
+            throw new Error(`The analysis finished, but the results could not be displayed (${err.message}). Try reloading the page.`);
+        }
     })
     .catch(err => {
         console.error(err);
@@ -193,8 +215,8 @@ function renderTables(name, gene) {
         phenotypes = window.fullJSON.phenotypes.filter(row => outputProteins.some(r => r.Name === row.Name));
 
         // Mouse queries list the queried gene's alleles, marking the ones this variant matches
-        alleleCoverage = markSubmitted(window.fullJSON.allele_coverage, gene, queryProteins);
-        otherMouseAlleles = markSubmitted(window.fullJSON.other_alleles, gene, queryProteins);
+        alleleCoverage = markEvaluated(window.fullJSON.allele_coverage, gene, queryProteins);
+        otherMouseAlleles = markEvaluated(window.fullJSON.other_alleles, gene, queryProteins);
         phenotypesByAllele = new Map(alleleCoverage.map(row => [row['AlleleID'], row]));
 
         // Sort output proteins and score dataframes
@@ -216,21 +238,21 @@ function renderTables(name, gene) {
     // On human queries, mouse alleles outside the coverage table get their own phenotype table
     const otherAlleles = org === 'human' && alleleCoverage.length > 0;
 
+    // Query variant fields that are not shown (MONDO_set only on human queries)
+    const queryVariantHidden = ['Name', 'Submission', 'Gene Symbol', 'refAA', 'protein_start', 'varAA',
+                                ...(org === 'human' ? ['MONDO_set'] : [])];
+
     // Create HTML tables
     results.innerHTML = `
         <div class='tableWrapper'>
-            <h2>${queryOrganism} Gene</h2>
-            ${jsonToHTMLTable(queryGenes, "queryGenesTable")}
-        </div>
-
-        <div class='tableWrapper'>
             <h2>${queryOrganism} Variant</h2>
-            ${jsonToHTMLTable(queryProteins, "queryVariantTable")}
+            ${jsonToFieldList(queryProteins.map(variantFields), "queryVariantTable", queryVariantHidden)}
         </div>
 
         <div class='tableWrapper'>
-            <h2>${targetOrganism} Homologs</h2>
-            ${jsonToHTMLTable(outputGenes, "outputGenesTable")}
+            <h2>Genes</h2>
+            ${jsonToFieldList([...queryGenes, ...outputGenes].map(geneFields), "genesTable", [],
+                              [...queryGenes.map(() => `${queryOrganism} Gene`), ...outputGenes.map(() => `${targetOrganism} Homolog`)])}
         </div>
 
         <div class='tableWrapper'>
@@ -248,10 +270,9 @@ function renderTables(name, gene) {
 
         ${org === 'mouse' ? otherAllelesSection(otherMouseAlleles, gene) : ''}
 
-        ${otherAlleles && phenotypes.length === 0 ? '' : `
+        ${otherAlleles ? otherAllelesSection(phenotypes, homolog) : `
         <div class='tableWrapper'>
-            <h2>${otherAlleles ? `Other ${homolog} Alleles with Phenotypes` : `${targetOrganism} Phenotypes`}</h2>
-            ${otherAlleles ? `<p class="coverageSummary">These alleles have phenotype annotations in MGI but no disease association, so they are not part of the coverage count above.</p>` : ''}
+            <h2>${targetOrganism} Phenotypes</h2>
             ${jsonToHTMLTable(phenotypes, "phenotypeTable")}
         </div>`}
     `;
@@ -266,48 +287,6 @@ function renderTables(name, gene) {
             }
         });
     }
-
-
-    // CREATE QUERY GENE DATATABLE ELEMENT
-    $('#queryGenesTable').DataTable({
-        dom: 't',
-        pageLength: 20,
-        ordering: false
-        });
-
-
-    // CREATE QUERY VARIANT DATATABLE ELEMENT
-    const queryVariantTable = $('#queryVariantTable').DataTable({
-        dom: 't',
-        pageLength: 20,
-        ordering: false
-    });
-
-    // Columns that are be hidden by default
-    const queryHiddenCols = [
-                    'Name',
-                    'Submission',
-                    'Gene Symbol',
-                    'refAA',
-                    'protein_start',
-                    'varAA'
-                ];
-
-    // Extra human-only columns to hide
-    const queryHumanHidden = ['MONDO_set'];
-
-    // Hide columns
-    hideColumnsByName(queryVariantTable, queryHiddenCols);
-
-    if (queryOrganism === 'Human') {hideColumnsByName(queryVariantTable, queryHumanHidden);}
-
-
-    // CREATE OUTPUT GENE DATATABLE ELEMENT
-    $('#outputGenesTable').DataTable({
-        dom: 't',
-        pageLength: 20,
-        ordering: false
-    });
 
 
     // CREATE OUTPUT VARIANT DATATABLE ELEMENT
@@ -372,18 +351,24 @@ function renderTables(name, gene) {
 
 
     initCoverageTable(phenotypesByAllele);
-    initOtherAllelesTable();
+    initOtherAllelesTable(otherAlleles ? phenotypes : otherMouseAlleles);
 
 }
 
 
-// Allele rows for a mouse gene, with Submitted marking the alleles the
+// Allele rows for a mouse gene, with Evaluated marking the alleles the
 // given variant rows match (the server marks every allele in the batch)
-function markSubmitted(alleleRows, gene, variantRows) {
+function markEvaluated(alleleRows, gene, variantRows) {
     const ids = new Set(variantRows.flatMap(row => String(row['AlleleID'] || '').split(', ')));
     return (alleleRows || [])
         .filter(row => row['Gene Symbol'] === gene)
-        .map(row => ({...row, Submitted: ids.has(row['AlleleID'])}));
+        .map(row => ({...row, Evaluated: ids.has(row['AlleleID'])}));
+}
+
+
+// Summary line for the alleles with phenotypes but no disease association (one row per allele)
+function otherAllelesSummary(count, gene) {
+    return `<p class="coverageSummary">MGI has <strong>${count}</strong> other ${gene} ${count === 1 ? 'allele' : 'alleles'} with phenotype annotations but no disease association, so ${count === 1 ? 'it is' : 'they are'} not part of the coverage count above.</p>`;
 }
 
 
@@ -393,13 +378,13 @@ function otherAllelesSection(otherAlleles, gene) {
     return `
         <div class='tableWrapper'>
             <h2>Other ${gene} Alleles with Phenotypes</h2>
-            <p class="coverageSummary">These alleles have phenotype annotations in MGI but no disease association, so they are not part of the coverage count above.</p>
+            ${otherAllelesSummary(otherAlleles.length, gene)}
             ${jsonToHTMLTable(otherAlleles, 'otherAlleleTable')}
         </div>`;
 }
 
 
-function initOtherAllelesTable() {
+function initOtherAllelesTable(otherAlleles) {
     const table = $('#otherAlleleTable');
     if (table.length === 0) return;
 
@@ -412,6 +397,24 @@ function initOtherAllelesTable() {
     // Hide Gene Symbol (same for all rows of a single-gene variant query)
     const headers = table.find('thead th').map((i, th) => $(th).text().trim()).get();
     otherAlleleTable.column(headers.indexOf('Gene Symbol')).visible(false);
+
+    initPhenotypeToggles('otherAlleleTable', otherAlleleTable, new Map(otherAlleles.map(row => [row['AlleleID'], row])));
+}
+
+
+// Open or close an allele's phenotype list beneath its row
+function initPhenotypeToggles(tableId, dataTable, phenotypesByAllele) {
+    $(`#${tableId} tbody`).on('click', 'button.phenotypeToggle', function () {
+        const row = dataTable.row($(this).closest('tr'));
+        if (row.child.isShown()) {
+            row.child.hide();
+            this.setAttribute('aria-expanded', 'false');
+        } else {
+            const phenos = phenotypesByAllele.get(this.dataset.allele).Phenotypes;
+            row.child(`<div class="phenotypeList">${phenotypeLinks(phenos)}</div>`).show();
+            this.setAttribute('aria-expanded', 'true');
+        }
+    });
 }
 
 
@@ -426,9 +429,9 @@ function coverageSection(alleleCoverage, gene, org) {
         const evaluated = alleleCoverage.filter(r => r.Evaluated).length;
         summary = `VarLift evaluated <strong>${evaluated} of ${total}</strong> disease-associated ${gene} alleles in MGI. ${total - evaluated} ${total - evaluated === 1 ? 'allele exists' : 'alleles exist'} but could not be cross-mapped (see table for reasons).`;
     } else {
-        const submitted = alleleCoverage.filter(r => r.Submitted).map(r => r.AlleleSymbol);
+        const submitted = alleleCoverage.filter(r => r.Evaluated).map(r => r.AlleleSymbol);
         summary = `MGI has <strong>${total}</strong> disease-associated ${gene} ${total === 1 ? 'allele' : 'alleles'}. ${submitted.length > 0
-            ? `The submitted variant matches ${submitted.join(', ')}.`
+            ? `The submitted variant corresponds to ${submitted.join(', ')}.`
             : 'The submitted variant does not match any of them.'}`;
     }
 
@@ -446,33 +449,20 @@ function initCoverageTable(phenotypesByAllele) {
     const table = $('#alleleCoverageTable');
     if (table.length === 0) return;
 
-    // Human queries flag Evaluated alleles, mouse queries Submitted ones
     const headers = table.find('thead th').map((i, th) => $(th).text().trim()).get();
-    const flag = headers.includes('Evaluated') ? 'Evaluated' : 'Submitted';
 
     const alleleCoverageTable = table.DataTable({
         dom: 'tp',
         pageLength: 20,
         ordering: true,
-        order: [[headers.indexOf(flag), 'desc'], [headers.indexOf('AlleleSymbol'), 'asc']],
+        order: [[headers.indexOf('Evaluated'), 'desc'], [headers.indexOf('AlleleSymbol'), 'asc']],
         columnDefs: [{ targets: headers.indexOf('Phenotypes'), orderable: false }]
     });
 
     // Hide Gene Symbol (same for all rows of a single-gene variant query)
     alleleCoverageTable.column(headers.indexOf('Gene Symbol')).visible(false);
 
-    // Open or close an allele's phenotype list beneath its row
-    $('#alleleCoverageTable tbody').on('click', 'button.phenotypeToggle', function () {
-        const row = alleleCoverageTable.row($(this).closest('tr'));
-        if (row.child.isShown()) {
-            row.child.hide();
-            this.setAttribute('aria-expanded', 'false');
-        } else {
-            const phenos = phenotypesByAllele.get(this.dataset.allele).Phenotypes;
-            row.child(`<div class="phenotypeList">${phenotypeLinks(phenos)}</div>`).show();
-            this.setAttribute('aria-expanded', 'true');
-        }
-    });
+    initPhenotypeToggles('alleleCoverageTable', alleleCoverageTable, phenotypesByAllele);
 }
 
 
@@ -486,8 +476,8 @@ function renderUnevaluated(name) {
 
     // Mouse variants inside a gene also get that gene's coverage and other-allele tables
     const gene = matches[0]['Gene Symbol'];
-    const alleleCoverage = org === 'mouse' && gene ? markSubmitted(window.fullJSON.allele_coverage, gene, matches) : [];
-    const otherAlleles = org === 'mouse' && gene ? markSubmitted(window.fullJSON.other_alleles, gene, matches) : [];
+    const alleleCoverage = org === 'mouse' && gene ? markEvaluated(window.fullJSON.allele_coverage, gene, matches) : [];
+    const otherAlleles = org === 'mouse' && gene ? markEvaluated(window.fullJSON.other_alleles, gene, matches) : [];
 
     // Allele phenotypes go in their own table so long lists don't stretch the rows
     // (alleles already listed in the tables above are left out)
@@ -544,7 +534,7 @@ function renderUnevaluated(name) {
     });
 
     initCoverageTable(new Map(alleleCoverage.map(row => [row['AlleleID'], row])));
-    initOtherAllelesTable();
+    initOtherAllelesTable(otherAlleles);
 }
 
 
@@ -585,42 +575,7 @@ function jsonToHTMLTable(data, tableId) {
     data.forEach(row => {
         html += `<tr>`;
         columns.forEach(col => {
-            let value = row[col] !== undefined ? row[col] : '';
-
-            // Coverage table phenotypes open in a dropdown beneath the row
-            if (col === 'Phenotypes' && tableId === 'alleleCoverageTable') {
-                const count = value.length;
-                value = count === 0 ? 'None' : `<button type="button" class="phenotypeToggle" data-allele="${row['AlleleID']}" aria-expanded="false">${count} phenotype${count === 1 ? '' : 's'}</button>`;
-            }
-
-            // Seperate Phenotypes into multiple lines
-            else if (col === 'Phenotypes' && Array.isArray(value)) {
-                value = phenotypeLinks(value);
-            }
-
-            // Add linking for alleles
-            // A mouse variant can match several alleles, listed as "MGI:1, MGI:2"
-            if (col === 'AlleleID' && value) {
-                value = String(value).split(', ')
-                    .map(id => `<a href="https://www.informatics.jax.org/allele/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`)
-                    .join(', ');
-            }
-
-            // Criteria that don't apply to the variant's scoring class
-            if (tableId === 'scoresTable' && col.endsWith('Match') && value === null) {
-                value = 'N/A';
-            }
-
-            // Add linking for PFAM domains
-            if (col === 'Pfam Domain ID' && value) {
-                value = `<a href="https://www.ebi.ac.uk/interpro/entry/pfam/${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
-            }
-
-            if (col === 'Name' && org === 'mouse' && tableId == 'outputVariantTable' && value) {
-                value = `<a href="https://www.ncbi.nlm.nih.gov/clinvar?term=${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
-            }
-
-            html += `<td>${value}</td>`;
+            html += `<td>${formatCell(row, col, tableId, org)}</td>`;
         });
         html += `</tr>`;
     });
@@ -628,6 +583,136 @@ function jsonToHTMLTable(data, tableId) {
     html += `</tbody></table>`;
 
     return html;
+}
+
+
+// Link for a gene accession: MGI IDs to MGI, HGNC IDs to HGNC
+function accessionLink(id) {
+    if (!id) return '';
+    const url = id.startsWith('MGI:') ? `https://www.informatics.jax.org/marker/${id}`
+              : id.startsWith('HGNC:') ? `https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/${id}`
+              : null;
+    return url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${id}</a>` : id;
+}
+
+
+// Gene row for display: the accession goes in parentheses after the Gene Symbol,
+// Description becomes Gene Name, and Chromosome, Start, End and Strand become one
+// Genome Location field (e.g. "Chr 2:105,499,234-105,530,952 (+)")
+function geneFields(row) {
+    const out = {};
+    Object.entries(row).forEach(([col, value]) => {
+        if (col === 'Gene Symbol') {
+            out[col] = row['Accession'] ? `${value} (${accessionLink(row['Accession'])})` : value;
+        } else if (col === 'Description') {
+            out['Gene Name'] = value;
+        } else if (col === 'Chromosome') {
+            const start = Number(row['Start']).toLocaleString('en-US');
+            const end = Number(row['End']).toLocaleString('en-US');
+            out['Genome Location'] = `Chr ${value}:${start}-${end} (${row['Strand']})`;
+        } else if (!['Start', 'End', 'Strand', 'Accession'].includes(col)) {
+            out[col] = value;
+        }
+    });
+    return out;
+}
+
+
+// Variant row for display: a Genome Location field first, taken from the input name
+// chromosome:start-end:ref/alt (e.g. "Chr 2:105,522,966 G>T"), and on mouse
+// variants the linked allele ID in parentheses after the AlleleSymbol
+function variantFields(row) {
+    const out = {...row};
+
+    if (row['AlleleID'] && row['AlleleSymbol']) {
+        out['AlleleSymbol'] = `${row['AlleleSymbol']} (${formatCell(row, 'AlleleID')})`;
+        delete out['AlleleID'];
+    }
+
+    const match = String(row['Name'] || '').match(/^([^:]+):(\d+)-(\d+):([^/]+)\/(.+)$/);
+    if (!match) return out;
+
+    const [, chrom, start, end, ref, alt] = match;
+    const position = start === end
+        ? Number(start).toLocaleString('en-US')
+        : `${Number(start).toLocaleString('en-US')}-${Number(end).toLocaleString('en-US')}`;
+    return {'Genome Location': `Chr ${chrom}:${position} ${ref}>${alt}`, ...out};
+}
+
+
+// Single-record tables (the query variant, and the query gene beside its homolog) read
+// down the page as Field / Value rows; several records become several value columns,
+// labelled by headers when given. Fields that are empty in every record are left out.
+function jsonToFieldList(data, tableId, hidden = [], headers = null) {
+    if (!data || data.length === 0) return `<p>No data</p>`;
+
+    const org = document.getElementById('queryOrganism').value;
+    const isEmpty = v => v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+    const fields = Object.keys(data[0])
+        .filter(col => !hidden.includes(col))
+        .filter(col => data.some(row => !isEmpty(row[col])));
+
+    let html = `<table id="${tableId}" class="fieldTable${headers ? ' compare' : ''}">`;
+    if (headers) {
+        html += `<thead><tr><th></th>${headers.map(h => `<th scope="col">${h}</th>`).join('')}</tr></thead>`;
+    }
+    html += `<tbody>`;
+    fields.forEach(col => {
+        html += `<tr><th scope="row">${col}</th>`;
+        data.forEach(row => {
+            html += `<td>${formatCell(row, col, tableId, org)}</td>`;
+        });
+        html += `</tr>`;
+    });
+    html += `</tbody></table>`;
+
+    return html;
+}
+
+
+// Display value of one table cell, with links for IDs
+function formatCell(row, col, tableId, org) {
+    let value = row[col] !== undefined ? row[col] : '';
+
+    // Allele table phenotypes open in a dropdown beneath the row
+    if (col === 'Phenotypes' && ['alleleCoverageTable', 'otherAlleleTable'].includes(tableId)) {
+        const count = value.length;
+        value = count === 0 ? 'None' : `<button type="button" class="phenotypeToggle" data-allele="${row['AlleleID']}" aria-expanded="false">${count} phenotype${count === 1 ? '' : 's'}</button>`;
+    }
+
+    // Seperate Phenotypes into multiple lines
+    else if (col === 'Phenotypes' && Array.isArray(value)) {
+        value = phenotypeLinks(value);
+    }
+
+    // Other lists (HP IDs, MONDO IDs, diseases) get spaces so they can wrap
+    else if (Array.isArray(value)) {
+        value = value.join(', ');
+    }
+
+    // Add linking for alleles
+    // A mouse variant can match several alleles, listed as "MGI:1, MGI:2"
+    if (col === 'AlleleID' && value) {
+        value = String(value).split(', ')
+            .map(id => `<a href="https://www.informatics.jax.org/allele/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`)
+            .join(', ');
+    }
+
+    // Criteria that don't apply to the variant's scoring class
+    if (tableId === 'scoresTable' && col.endsWith('Match') && value === null) {
+        value = 'N/A';
+    }
+
+    // Add linking for PFAM domains
+    if (col === 'Pfam Domain ID' && value) {
+        value = `<a href="https://www.ebi.ac.uk/interpro/entry/pfam/${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+    }
+
+    if (col === 'Name' && org === 'mouse' && tableId == 'outputVariantTable' && value) {
+        value = `<a href="https://www.ncbi.nlm.nih.gov/clinvar?term=${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+    }
+
+    return value;
 }
 
 

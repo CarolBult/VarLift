@@ -40,11 +40,20 @@
 
         <p class="instruction"> Input one variant per line, in the format: chromosome:start-end:ref/alt.</p>
 
+        <div class="examples">
+            <p class="instruction">Examples (click one to add it to the box; the organism is set to match):</p>
+            <ul class="exampleList">
+                <li><span class="exampleSpecies">Human (GRCh38):</span>
+                    <button type="button" class="exampleVariant" data-organism="human" data-variant="2:157774114-157774114:C/T">2:157774114-157774114:C/T</button> <span class="exampleNote">ACVR1 R206H</span>,
+                    <button type="button" class="exampleVariant" data-organism="human" data-variant="1:39468726-39468726:T/G">1:39468726-39468726:T/G</button> <span class="exampleNote">MACF1</span></li>
+                <li><span class="exampleSpecies">Mouse (GRCm39):</span>
+                    <button type="button" class="exampleVariant" data-organism="mouse" data-variant="X:73080081-73080081:G/A">X:73080081-73080081:G/A</button> <span class="exampleNote">Mecp2 R133C</span>,
+                    <button type="button" class="exampleVariant" data-organism="mouse" data-variant="2:105522966-105522966:G/T">2:105522966-105522966:G/T</button> <span class="exampleNote">Pax6 splice donor</span></li>
+            </ul>
+        </div>
+
         <div>
-            <textarea id="variantInput" rows="8" cols="50" 
-            placeholder="Example:
-2:157774114-157774114:C/T
-1:39468726-39468726:T/G"></textarea>
+            <textarea id="variantInput" rows="8" cols="50"></textarea>
         </div>
 
         <div>

@@ -98,6 +98,54 @@ button:active {
     padding: 0px;
 }
 
+/* SEARCH EXAMPLES */
+.exampleList {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    font-size: 12px;
+    color: #333;
+    line-height: 2;
+}
+
+.examples .instruction {
+    margin-bottom: 4px;
+}
+
+.exampleList li {
+    margin: 0;
+    padding: 0;
+}
+
+.exampleSpecies {
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.exampleVariant {
+    font-family: Consolas, Menlo, monospace;
+    font-size: 12px;
+    color: #1f4e79;
+    background: #eef3f8;
+    border: 1px solid #c5d5e6;
+    border-radius: 3px;
+    padding: 1px 6px;
+    cursor: pointer;
+}
+
+.exampleVariant:hover {
+    background: #dce8f3;
+}
+
+.exampleVariant:focus-visible {
+    outline: 2px solid #587da1;
+    outline-offset: 1px;
+}
+
+.exampleNote {
+    color: #666;
+}
+
 /* SEARCH ERROR MESSAGE */
 .errorMessage {
     max-width: 600px;
@@ -226,6 +274,46 @@ table.dataTable tbody tr:hover {
     max-width: 95%;
     box-sizing: border-box;
     overflow-x: auto;
+}
+
+/* FIELD / VALUE TABLES (single-record results) */
+table.fieldTable {
+    font-size: 14px;
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 900px;
+}
+
+table.fieldTable th {
+    width: 200px;
+    text-align: left;
+    vertical-align: top;
+    padding: 6px 12px;
+    background: #f1f3f9;
+    color: #1C2A66;
+    font-weight: 600;
+    border-bottom: 1px solid #ffffff;
+}
+
+/* Side-by-side records (query gene and homolog) get equal value columns */
+table.fieldTable.compare {
+    table-layout: fixed;
+}
+
+table.fieldTable thead th {
+    background: #1C2A66;
+    color: #ffffff;
+}
+
+table.fieldTable thead th + th {
+    width: auto;
+}
+
+table.fieldTable td {
+    padding: 6px 12px;
+    vertical-align: top;
+    border-bottom: 1px solid #e5e8f0;
+    overflow-wrap: anywhere;
 }
 
 /* PHENOTYPE DROPDOWNS */

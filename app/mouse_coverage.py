@@ -145,7 +145,7 @@ def query_allele_coverage(genes, submitted_allele_ids):
         return coverage
 
     # Reason explains why VarLift couldn't evaluate an allele, which doesn't apply here
-    coverage = coverage.drop(columns=['Reason']).rename(columns={'Evaluated': 'Submitted'})
+    coverage = coverage.drop(columns=['Reason'])
 
     phenotypes = MGI_phenotype_df['Phenotypes'].str.split('|').to_dict()
     coverage['Phenotypes'] = coverage['AlleleID'].map(lambda a: phenotypes.get(a, []))
@@ -166,6 +166,6 @@ def query_other_alleles(genes, submitted_allele_ids):
     va = va[~va['AlleleId'].isin(disease_ids) & va['AlleleId'].isin(phenotypes.keys())]
 
     other = va.rename(columns={'AlleleAssociatedGeneSymbol': 'Gene Symbol', 'AlleleId': 'AlleleID'})
-    other['Submitted'] = other['AlleleID'].isin(set(submitted_allele_ids))
+    other['Evaluated'] = other['AlleleID'].isin(set(submitted_allele_ids))
     other['Phenotypes'] = other['AlleleID'].map(phenotypes)
-    return other.sort_values(['Submitted', 'AlleleSymbol'], ascending=[False, True]).reset_index(drop=True)
+    return other.sort_values(['Evaluated', 'AlleleSymbol'], ascending=[False, True]).reset_index(drop=True)
