@@ -53,7 +53,9 @@ def prepare_submission(variants):
 
     variants['Submission'] = (variants['Chromosome'].astype(str) + '\t' + variants['Start'].astype(str) + '\t.\t' + variants['Ref'] + '\t' + variants['Alt'])
 
-    try: submission_HGVS_map = dict(zip(variants['Submission'], variants['Name']))
+    # ClinVar records without VCF alleles have no Submission; several NaN keys would break .map()
+    has_submission = variants['Submission'].notna()
+    try: submission_HGVS_map = dict(zip(variants.loc[has_submission, 'Submission'], variants.loc[has_submission, 'Name']))
 
     except: submission_HGVS_map = None
 
