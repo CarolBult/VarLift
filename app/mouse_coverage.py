@@ -43,14 +43,13 @@ def _unique_consequences(consequence):
 
 
 def _reason_for(consequence, is_evaluated):
+    # One generic reason: MGI's allele type doesn't tell evaluable from unevaluable
+    # alleles (engineered and humanized alleles can carry evaluable changes), and the
+    # Consequence column already shows the consequence where there is one
     if is_evaluated:
         return ''
-    if not isinstance(consequence, str) or consequence == '' or pd.isna(consequence):
-        return 'Structural or transgenic allele (no amino-acid-level annotation)'
-    low = consequence.lower()
-    if 'missense' in low or 'stop_gained' in low:
-        return 'Variant could not be cross-mapped to human'
-    return f'Consequence not evaluable: {consequence}'
+    return ('Variant genome coordinates not available or molecular consequence '
+            'not evaluable (e.g. 5_prime_UTR_variant).')
 
 
 def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids, all_alleles=False):

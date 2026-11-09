@@ -34,6 +34,7 @@ document.getElementById('runButton').addEventListener('click', function () {
     const org = document.getElementById('queryOrganism').value;
 
     showError('');
+    const stopStatus = showStatus(vars.split('\n').filter(line => line.trim()).length);
 
     fetch('/run_variants', {
         method: 'POST',
@@ -67,8 +68,44 @@ document.getElementById('runButton').addEventListener('click', function () {
         document.getElementById('layoutOutput').style.display = 'none';
         document.getElementById('resultsPanel').hidden = true;
         showError(err.message);
-    });
+    })
+    .finally(stopStatus);
 });
+
+
+// While a query runs: hide earlier results, show the status panel with a running
+// clock, and disable Submit so the query isn't sent twice. Returns the function
+// that puts everything back.
+function showStatus(variantCount) {
+    const panel = document.getElementById('statusPanel');
+    const elapsed = document.getElementById('statusElapsed');
+    const button = document.getElementById('runButton');
+    const start = Date.now();
+
+    document.getElementById('resultsPanel').hidden = true;
+    document.getElementById('layoutOutput').style.display = 'none';
+
+    document.getElementById('statusText').textContent =
+        `Mapping ${variantCount} ${variantCount === 1 ? 'variant' : 'variants'} with Ensembl VEP, ClinVar and MGI. ` +
+        'This can take a minute or more for genes with many alleles or ClinVar variants.';
+    elapsed.textContent = '0:00';
+    panel.hidden = false;
+
+    button.disabled = true;
+    button.textContent = 'Running…';
+
+    const timer = setInterval(() => {
+        const seconds = Math.floor((Date.now() - start) / 1000);
+        elapsed.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+    }, 1000);
+
+    return () => {
+        clearInterval(timer);
+        panel.hidden = true;
+        button.disabled = false;
+        button.textContent = 'Submit';
+    };
+}
 
 
 // Show a message under the Submit button; an empty message hides it
@@ -425,8 +462,10 @@ function initCoverageTable(phenotypesByAllele) {
         columnDefs: [{ targets: headers.indexOf('Phenotypes'), orderable: false }]
     });
 
-    // Hide Gene Symbol (same for all rows of a single-gene variant query)
+    // Hide Gene Symbol (same for all rows of a single-gene variant query), and
+    // AlleleID, which is shown beneath the allele symbol
     alleleCoverageTable.column(headers.indexOf('Gene Symbol')).visible(false);
+    alleleCoverageTable.column(headers.indexOf('AlleleID')).visible(false);
 
     initPhenotypeToggles('alleleCoverageTable', alleleCoverageTable, phenotypesByAllele);
 }
@@ -529,8 +568,11 @@ function jsonToHTMLTable(data, tableId) {
     let html = `<table id="${tableId}" class="table.dataTable">`;
     html += `<thead><tr>`;
 
+    // Coverage table: the allele's disease models are human diseases
+    const label = col => (tableId === 'alleleCoverageTable' && col === 'Diseases') ? 'Human Diseases Modeled' : col;
+
     columns.forEach(col => {
-        html += `<th>${col}</th>`;
+        html += `<th>${label(col)}</th>`;
     });
 
     html += `</tr></thead><tbody>`;
@@ -716,6 +758,16 @@ function formatCell(row, col, tableId, org) {
         value = String(value).split(', ')
             .map(id => `<a href="https://www.informatics.jax.org/allele/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`)
             .join(', ');
+    }
+
+    // The reason is a long sentence; a wider cell keeps the rows short
+    if (col === 'Reason' && tableId === 'alleleCoverageTable' && value) {
+        value = `<span class="reasonText">${value}</span>`;
+    }
+
+    // Coverage rows stack the linked allele ID beneath the allele symbol, to save a column
+    if (col === 'AlleleSymbol' && tableId === 'alleleCoverageTable' && row['AlleleID']) {
+        value = `${value}<br><span class="alleleId">${formatCell(row, 'AlleleID', tableId, org)}</span>`;
     }
 
     // Score rows link the allele symbol to its MGI allele page (the AlleleID column is hidden)

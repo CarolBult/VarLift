@@ -77,8 +77,18 @@
 
     </div>
 
+    <!-- Shown while a query runs -->
+    <div id="statusPanel" class="sidePanel" role="status" aria-live="polite" hidden>
+        <div class="spinner" aria-hidden="true"></div>
+        <div>
+            <h2>Evaluating&hellip;</h2>
+            <p class="instruction" id="statusText"></p>
+            <p class="instruction">Elapsed: <span id="statusElapsed">0:00</span></p>
+        </div>
+    </div>
+
     <!-- Shown when results arrive; clicking a variant jumps down to its tables -->
-    <div id="resultsPanel" hidden>
+    <div id="resultsPanel" class="sidePanel" hidden>
         <h2>Results ready</h2>
         <p class="instruction">Click a variant to view its results below.</p>
         <div id="sidebar"></div>

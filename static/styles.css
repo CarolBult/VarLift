@@ -105,9 +105,10 @@ button:active {
     box-sizing: border-box;
 }
 
-/* RESULTS PANEL: variant buttons; clicking one jumps down to its tables */
-#resultsPanel {
-    /* Takes the space beside the input box, but no wider than its buttons need */
+/* PANELS BESIDE THE INPUT BOX: the status while a query runs, then the variant
+   buttons (clicking one jumps down to its tables) */
+.sidePanel {
+    /* Takes the space beside the input box, but no wider than its contents need */
     flex: 1 1 280px;
     max-width: max-content;
     background: #f6f8fc;
@@ -116,8 +117,46 @@ button:active {
     box-sizing: border-box;
 }
 
-#resultsPanel[hidden] {
+.sidePanel[hidden] {
     display: none;
+}
+
+/* STATUS PANEL: spinner beside the message (only while shown: a plain
+   #statusPanel rule would outrank .sidePanel[hidden] and keep it on screen) */
+#statusPanel:not([hidden]) {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.spinner {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    margin-top: 12px;
+    border: 4px solid #d3e2f1;
+    border-top-color: #1C2A66;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Without motion, a still ring; the elapsed time still shows progress */
+@media (prefers-reduced-motion: reduce) {
+    .spinner {
+        animation: none;
+    }
+}
+
+/* Submit while a query runs */
+button:disabled,
+button:disabled:hover {
+    background-color: #8fa6bd;
+    transform: none;
+    cursor: wait;
 }
 
 .backToVariants {
@@ -431,6 +470,17 @@ table.fieldTable td {
     vertical-align: top;
     border-bottom: 1px solid #e5e8f0;
     overflow-wrap: anywhere;
+}
+
+/* Allele ID stacked beneath the allele symbol in the coverage table */
+.alleleId {
+    font-size: 12px;
+}
+
+/* Not-evaluated reason in the coverage table, wide enough to wrap onto two or three lines */
+.reasonText {
+    display: inline-block;
+    min-width: 24em;
 }
 
 /* PHENOTYPE DROPDOWNS */
