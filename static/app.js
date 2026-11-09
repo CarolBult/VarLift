@@ -65,6 +65,7 @@ document.getElementById('runButton').addEventListener('click', function () {
         // Hide results from any earlier search so they aren't mistaken for this one
         window.fullJSON = undefined;
         document.getElementById('layoutOutput').style.display = 'none';
+        document.getElementById('resultsPanel').hidden = true;
         showError(err.message);
     });
 });
@@ -108,6 +109,10 @@ function groupedScoreSort(scores) {
 function buildSidebar(data) {
     const sidebar = document.getElementById('sidebar');
 
+    // Show the results panel beside the input box; the tables appear when a variant is clicked
+    document.getElementById('resultsPanel').hidden = false;
+    document.getElementById('layoutOutput').style.display = 'none';
+
     const queryVariants = data.query_variants || [];
     const unevaluated = data.unevaluated_variants || [];
 
@@ -132,8 +137,11 @@ function buildSidebar(data) {
             // activate clicked button
             btn.classList.add('active')
 
-            // render output tables
+            // render output tables and jump down to them
             render();
+            const output = document.getElementById('layoutOutput');
+            output.style.display = 'block';
+            output.scrollIntoView({behavior: 'smooth', block: 'start'});
         }
         sidebar.appendChild(btn);
     }
@@ -147,10 +155,14 @@ function buildSidebar(data) {
         sidebar.insertAdjacentHTML('beforeend', '<h3>Not Evaluated:</h3>');
         unevaluatedNames.forEach(name => addButton(name, () => renderUnevaluated(name)));
     }
-
-    // Unhide results
-    document.getElementById('layoutOutput').style.display = 'flex';
 }
+
+
+// Back to the variant list from the results tables
+document.querySelector('.backToVariants').addEventListener('click', function (event) {
+    event.preventDefault();
+    document.querySelector('.topRow').scrollIntoView({behavior: 'smooth', block: 'start'});
+});
 
 
 // Render all tables for the selected input
@@ -419,7 +431,7 @@ function coverageSection(alleleCoverage, gene, org) {
     } else if (org === 'human') {
         const evaluated = alleleCoverage.filter(r => r.Evaluated).length;
         const withDisease = alleleCoverage.filter(r => r.Diseases && r.Diseases.length > 0).length;
-        summary = `VarLift evaluated <strong>${evaluated} of ${total}</strong> ${gene} alleles in MGI (${withDisease} with a disease association). ${total - evaluated} ${total - evaluated === 1 ? 'allele exists' : 'alleles exist'} but could not be cross-mapped (see table for reasons).`;
+        summary = `VarLift evaluated <strong>${evaluated} of ${total}</strong> ${gene} alleles in MGI (${withDisease} with a disease association). ${total - evaluated} ${total - evaluated === 1 ? 'allele exists' : 'alleles exist'} but could not be evaluated for equivalency (see table for reasons).`;
     } else {
         const submitted = alleleCoverage.filter(r => r.Evaluated).map(r => r.AlleleSymbol);
         summary = `MGI has <strong>${total}</strong> disease-associated ${gene} ${total === 1 ? 'allele' : 'alleles'}. ${submitted.length > 0
