@@ -151,37 +151,14 @@ def mgi_alleles_at(variants):
 
 def query_allele_coverage(genes, submitted_allele_ids):
     '''
-    Coverage table for a mouse query: every disease-associated MGI allele of
-    each queried gene, flagging the alleles that match a submitted variant,
-    with each allele's phenotypes.
+    Coverage table for a mouse query: every MGI allele of each queried gene
+    (disease models and alleles with variant data), flagging the alleles that
+    match a submitted variant, with each allele's phenotypes.
     '''
-    frames = [allele_coverage_for_gene(gene, submitted_allele_ids) for gene in genes]
+    frames = [allele_coverage_for_gene(gene, submitted_allele_ids, all_alleles=True) for gene in genes]
     coverage = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
     if coverage.empty:
         return coverage
 
     # Reason explains why VarLift couldn't evaluate an allele, which doesn't apply here
-    coverage = coverage.drop(columns=['Reason'])
-
-    phenotypes = MGI_phenotype_df['Phenotypes'].str.split('|').to_dict()
-    coverage['Phenotypes'] = coverage['AlleleID'].map(lambda a: phenotypes.get(a, []))
-    return coverage
-
-
-def query_other_alleles(genes, submitted_allele_ids):
-    '''
-    MGI alleles of each queried gene that have phenotypes but no disease model,
-    so they are outside the coverage table.
-    '''
-    disease_ids = set(_load_disease_models()['AlleleID'])
-    phenotypes = MGI_phenotype_df['Phenotypes'].str.split('|').to_dict()
-
-    va = _load_variant_allele()
-    va = va[va['AlleleAssociatedGeneSymbol'].isin(genes)]
-    va = va[['AlleleAssociatedGeneSymbol', 'AlleleId', 'AlleleSymbol']].drop_duplicates(subset=['AlleleId'])
-    va = va[~va['AlleleId'].isin(disease_ids) & va['AlleleId'].isin(phenotypes.keys())]
-
-    other = va.rename(columns={'AlleleAssociatedGeneSymbol': 'Gene Symbol', 'AlleleId': 'AlleleID'})
-    other['Evaluated'] = other['AlleleID'].isin(set(submitted_allele_ids))
-    other['Phenotypes'] = other['AlleleID'].map(phenotypes)
-    return other.sort_values(['Evaluated', 'AlleleSymbol'], ascending=[False, True]).reset_index(drop=True)
+    return coverage.drop(columns=['Reason'])

@@ -491,7 +491,7 @@ def mvar_query(variants, assembly='GRCm39'):
     unevaluated_df = unevaluated_variants(variants, vep_df.get('Submission', []), 'mus_musculus', noncoding_vep_df)
 
     # MGI alleles at the submitted coordinates
-    from app.mouse_coverage import mgi_alleles_at, query_allele_coverage, query_other_alleles
+    from app.mouse_coverage import mgi_alleles_at, query_allele_coverage
     alleles = mgi_alleles_at(variants)
     submitted_ids = set(alleles['AlleleID'])
     unevaluated_genes = set(unevaluated_df.get('Gene Symbol', pd.Series(dtype=object)).dropna())
@@ -500,8 +500,7 @@ def mvar_query(variants, assembly='GRCm39'):
         if unevaluated_df.empty:
             raise NoCodingVariantsError('No protein-coding consequences found on GRCm39.')
         allele_coverage_df = query_allele_coverage(sorted(unevaluated_genes), submitted_ids)
-        other_alleles_df = query_other_alleles(sorted(unevaluated_genes), submitted_ids)
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), unevaluated_df, allele_coverage_df, other_alleles_df
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), unevaluated_df, allele_coverage_df
 
     # Assign input field
     vep_df['Name'] = vep_df['Submission'].map(submission_name_map)
@@ -549,13 +548,11 @@ def mvar_query(variants, assembly='GRCm39'):
     e = time.time()
     print(f'Mouse Time: {e-s}')
 
-    # Every disease-associated MGI allele of the queried genes, flagging the submitted ones,
-    # and the alleles with phenotypes but no disease model
+    # Every MGI allele of the queried genes, flagging the submitted ones
     genes = sorted(set(protein_df['Gene Symbol'].dropna()) | unevaluated_genes)
     allele_coverage_df = query_allele_coverage(genes, submitted_ids)
-    other_alleles_df = query_other_alleles(genes, submitted_ids)
 
-    return gene_df, protein_df, input_gene_df, unevaluated_df, allele_coverage_df, other_alleles_df
+    return gene_df, protein_df, input_gene_df, unevaluated_df, allele_coverage_df
 
 
 def hvar_fetch(mouse_prt_df, input_mapping_df, assembly='GRCh38'):

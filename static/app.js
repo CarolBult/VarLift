@@ -229,7 +229,6 @@ function renderTables(name, gene) {
 
         // Mouse queries list the queried gene's alleles, marking the ones this variant matches
         alleleCoverage = markEvaluated(window.fullJSON.allele_coverage, gene, queryProteins);
-        otherMouseAlleles = markEvaluated(window.fullJSON.other_alleles, gene, queryProteins);
         phenotypesByAllele = new Map(alleleCoverage.map(row => [row['AlleleID'], row]));
 
         // Sort output proteins and score dataframes
@@ -277,8 +276,6 @@ function renderTables(name, gene) {
 
 
         ${coverageSection(alleleCoverage, org === 'human' ? homolog : gene, org)}
-
-        ${org === 'mouse' ? otherAllelesSection(otherMouseAlleles, gene) : ''}
 
         ${org === 'human' ? '' : `
         <div class='tableWrapper'>
@@ -356,7 +353,6 @@ function renderTables(name, gene) {
 
 
     initCoverageTable(phenotypesByAllele);
-    initOtherAllelesTable(org === 'mouse' ? otherMouseAlleles : []);
 
 }
 
@@ -368,40 +364,6 @@ function markEvaluated(alleleRows, gene, variantRows) {
     return (alleleRows || [])
         .filter(row => row['Gene Symbol'] === gene)
         .map(row => ({...row, Evaluated: ids.has(row['AlleleID'])}));
-}
-
-
-// Summary line for the alleles with phenotypes but no disease association (one row per allele)
-function otherAllelesSummary(count, gene) {
-    return `<p class="coverageSummary">MGI has <strong>${count}</strong> other ${gene} ${count === 1 ? 'allele' : 'alleles'} with phenotype annotations but no disease association, so ${count === 1 ? 'it is' : 'they are'} not part of the coverage count above.</p>`;
-}
-
-
-// Mouse query alleles with phenotypes but no disease model
-function otherAllelesSection(otherAlleles, gene) {
-    if (otherAlleles.length === 0) return '';
-    return `
-        <div class='tableWrapper'>
-            <h2>Other ${gene} Alleles with Phenotypes</h2>
-            ${otherAllelesSummary(otherAlleles.length, gene)}
-            ${jsonToHTMLTable(otherAlleles, 'otherAlleleTable')}
-        </div>`;
-}
-
-
-function initOtherAllelesTable(otherAlleles) {
-    const table = $('#otherAlleleTable');
-    if (table.length === 0) return;
-
-    const otherAlleleTable = table.DataTable({
-        ordering: false
-    });
-
-    // Hide Gene Symbol (same for all rows of a single-gene variant query)
-    const headers = table.find('thead th').map((i, th) => $(th).text().trim()).get();
-    otherAlleleTable.column(headers.indexOf('Gene Symbol')).visible(false);
-
-    initPhenotypeToggles('otherAlleleTable', otherAlleleTable, new Map(otherAlleles.map(row => [row['AlleleID'], row])));
 }
 
 
@@ -427,14 +389,15 @@ function coverageSection(alleleCoverage, gene, org) {
     let summary;
 
     if (total === 0) {
-        summary = org === 'human' ? 'No mouse alleles found in MGI.' : 'No disease-associated mouse alleles found in MGI.';
+        summary = 'No mouse alleles found in MGI.';
     } else if (org === 'human') {
         const evaluated = alleleCoverage.filter(r => r.Evaluated).length;
         const withDisease = alleleCoverage.filter(r => r.Diseases && r.Diseases.length > 0).length;
         summary = `VarLift evaluated <strong>${evaluated} of ${total}</strong> ${gene} alleles in MGI (${withDisease} with a disease association). ${total - evaluated} ${total - evaluated === 1 ? 'allele exists' : 'alleles exist'} but could not be evaluated for equivalency (see table for reasons).`;
     } else {
         const submitted = alleleCoverage.filter(r => r.Evaluated).map(r => r.AlleleSymbol);
-        summary = `MGI has <strong>${total}</strong> disease-associated ${gene} ${total === 1 ? 'allele' : 'alleles'}. ${submitted.length > 0
+        const withDisease = alleleCoverage.filter(r => r.Diseases && r.Diseases.length > 0).length;
+        summary = `MGI has <strong>${total}</strong> ${gene} ${total === 1 ? 'allele' : 'alleles'} (${withDisease} with a disease association). ${submitted.length > 0
             ? `The submitted variant corresponds to ${submitted.join(', ')}.`
             : 'The submitted variant does not match any of them.'}`;
     }
@@ -476,14 +439,13 @@ function renderUnevaluated(name) {
     const matches = window.fullJSON.unevaluated_variants.filter(row => row['Input Name'] === name);
     const hasAlleles = matches.some(row => row['AlleleID']);
 
-    // Mouse variants inside a gene also get that gene's coverage and other-allele tables
+    // Mouse variants inside a gene also get that gene's coverage table
     const gene = matches[0]['Gene Symbol'];
     const alleleCoverage = org === 'mouse' && gene ? markEvaluated(window.fullJSON.allele_coverage, gene, matches) : [];
-    const otherAlleles = org === 'mouse' && gene ? markEvaluated(window.fullJSON.other_alleles, gene, matches) : [];
 
     // Allele phenotypes go in their own table so long lists don't stretch the rows
-    // (alleles already listed in the tables above are left out)
-    const listed = new Set([...alleleCoverage, ...otherAlleles].map(row => row['AlleleID']));
+    // (alleles already listed in the coverage table are left out)
+    const listed = new Set(alleleCoverage.map(row => row['AlleleID']));
     const phenotypes = matches
         .filter(row => !isEmpty(row['Phenotypes']) && !listed.has(row['AlleleID']))
         .map(row => ({AlleleID: row['AlleleID'], AlleleSymbol: row['AlleleSymbol'], Phenotypes: row['Phenotypes']}));
@@ -510,8 +472,6 @@ function renderUnevaluated(name) {
         </div>`}
 
         ${alleleCoverage.length === 0 ? '' : coverageSection(alleleCoverage, gene, org)}
-
-        ${otherAllelesSection(otherAlleles, gene)}
     `;
 
     const table = $('#unevaluatedTable').DataTable({
@@ -537,7 +497,6 @@ function renderUnevaluated(name) {
     });
 
     initCoverageTable(new Map(alleleCoverage.map(row => [row['AlleleID'], row])));
-    initOtherAllelesTable(otherAlleles);
 }
 
 
@@ -700,7 +659,7 @@ function formatCell(row, col, tableId, org) {
     let value = row[col] !== undefined ? row[col] : '';
 
     // Allele table phenotypes open in a dropdown beneath the row
-    if (col === 'Phenotypes' && ['alleleCoverageTable', 'otherAlleleTable'].includes(tableId)) {
+    if (col === 'Phenotypes' && tableId === 'alleleCoverageTable') {
         const count = value.length;
         value = count === 0 ? 'None' : `<button type="button" class="phenotypeToggle" data-allele="${row['AlleleID']}" aria-expanded="false">${count} phenotype${count === 1 ? '' : 's'}</button>`;
     }
