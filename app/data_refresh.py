@@ -26,6 +26,8 @@ def refresh_mgi():
     download_file(config['data']['mgi_homology'], config['paths']['mgi_homology'])
     download_file(config['data']['mgi_disease'], config['paths']['mgi_disease'])
     download_file(config['data']['mgi_phenotype'], config['paths']['mgi_phenotype'])
+    # Mammalian Phenotype ontology: which MP terms are top-level system headers (not scored)
+    download_file(config['data']['mp_obo'], config['paths']['mp_obo'])
 
 def refresh_mp_hp_mapping():
     '''
@@ -39,9 +41,11 @@ def refresh_hpoa():
     Downloads HPO annotation files:
     - phenotype.hpoa: disease -> HP term annotations (used for variant-level HP lookup via MONDO chaining)
     - genes_to_phenotype.txt: gene -> HP term annotations (used for gene-level HP lookup)
+    - hp.obo: the ontology itself, for HP term names shown in the results
     '''
     download_file(config['data']['hpoa'], config['paths']['hpoa'])
     download_file(config['data']['genes_to_phenotype'], config['paths']['genes_to_phenotype'])
+    download_file(config['data']['hp_obo'], config['paths']['hp_obo'])
 
 
 def refresh_clinvar():

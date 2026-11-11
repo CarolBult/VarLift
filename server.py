@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 
 import logging
 
-from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score, NoCodingVariantsError
+from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score, NoCodingVariantsError, phenotype_similarity
 from app.processing_util import process_batch_query
 
 ORGANISM_LABELS = {'human': 'Human (GRCh38)', 'mouse': 'Mouse (GRCm39)'}
@@ -88,6 +88,7 @@ def run_pipeline(data):
 
     # Stay empty when none of the variants has a coding consequence
     output_gene_df, output_prt_df, output_phenotype_df, score_df = (pd.DataFrame() for _ in range(4))
+    phenotype_similarity_df = pd.DataFrame()   # human queries only
 
     if data.organism == 'human':
 
@@ -96,6 +97,10 @@ def run_pipeline(data):
             output_gene_df, output_prt_df, output_phenotype_df, input_genes, allele_coverage_df = mvar_fetch(input_genes)
             score_df = hvar_query_score(query_prt_df, output_prt_df, input_genes, mouse_phenotype_df=output_phenotype_df)
             output_phenotype_df = sort_phenotypes_by_score(output_phenotype_df, score_df)
+            # One row per evaluated allele, with the term mapping behind each phenotype score
+            if not score_df.empty:
+                phenotype_similarity_df = phenotype_similarity(
+                    query_prt_df, score_df[['Input Name', 'AlleleID']], output_phenotype_df, detail=True)
 
     if data.organism == 'mouse':
 
@@ -113,7 +118,14 @@ def run_pipeline(data):
             'phenotypes': output_phenotype_df.to_dict(orient='records'),
             'gene_mapping': input_genes.to_dict(orient='records'),
             'allele_coverage': allele_coverage_df.to_dict(orient='records'),
-            'unevaluated_variants': unevaluated_df.to_dict(orient='records')}
+            'unevaluated_variants': unevaluated_df.to_dict(orient='records'),
+            'phenotype_similarity': phenotype_similarity_df.to_dict(orient='records')}
+
+    # Names for the HP term lists (HP_IDs_variant, HP_IDs_gene), shown beside each ID
+    from app.hpoa import hp_names
+    hp_ids = {hp for table in results.values() for row in table for col, value in row.items()
+              if col.startswith('HP_IDs') and isinstance(value, list) for hp in value}
+    results['hp_names'] = hp_names(hp_ids)
 
     safe_result = jsonable_encoder(results)
 

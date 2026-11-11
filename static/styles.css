@@ -428,8 +428,45 @@ details.termDropdown summary:hover {
     background: #eef1f8;
 }
 
-details.termDropdown .phenotypeList {
-    columns: 4;
+/* HP term lists: one term per row, name first and its ID in small grey text after it.
+   Terms fill an even grid (one column in a narrow cell), and a long list scrolls in place. */
+ul.hpTermList {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 6px 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 20rem), 1fr));
+    gap: 2px 24px;
+    max-height: 22rem;
+    overflow-y: auto;
+    min-width: min(100%, 20rem);
+    border: 1px solid #e3e7f1;
+    border-radius: 4px;
+    background: #fbfcfe;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+ul.hpTermList li {
+    padding: 3px 0;
+    border-bottom: 1px solid #eef1f8;
+    break-inside: avoid;
+}
+
+ul.hpTermList a {
+    text-decoration: none;
+}
+
+ul.hpTermList a:hover {
+    text-decoration: underline;
+}
+
+ul.hpTermList .hpId {
+    margin-left: 6px;
+    font-size: 12px;
+    color: #6b7280;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
 }
 
 /* FIELD / VALUE TABLES (single-record results) */
@@ -529,3 +566,208 @@ button.phenotypeToggle[aria-expanded="true"]::before {
     padding: 0px;
 }
 
+
+/* PHENOTYPE SIMILARITY */
+#phenotypeSimilarityTable td.scoreCell {
+    white-space: nowrap;
+}
+
+#phenotypeSimilarityTable .scoreValue {
+    display: inline-block;
+    min-width: 2.6em;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+#phenotypeSimilarityTable .naScore {
+    color: #6b7280;
+    font-weight: 400;
+}
+
+button.mappingToggle {
+    margin-left: 8px;
+    font-size: 13px;
+}
+
+/* Term mapping beneath an allele row */
+.mappingView {
+    padding: 10px 14px 14px;
+    background: #fbfcfe;
+    border-left: 3px solid #1C2A66;
+}
+
+.mappingView .mappingNote {
+    margin: 0 0 6px;
+    max-width: 75ch;
+    line-height: 1.5;
+}
+
+.mappingView .mappingCounts {
+    margin: 0 0 8px;
+    font-size: 13px;
+    color: #4b5563;
+}
+
+.mappingScroll {
+    max-height: 26rem;
+    overflow: auto;
+    border: 1px solid #e3e7f1;
+    border-radius: 4px;
+    background: #fff;
+}
+
+table.mappingTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+table.mappingTable th {
+    position: sticky;
+    top: 0;
+    background: #f3f5fa;
+    text-align: left;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-bottom: 1px solid #d9deea;
+    white-space: nowrap;
+}
+
+table.mappingTable td {
+    padding: 5px 10px;
+    border-bottom: 1px solid #eef1f8;
+    vertical-align: top;
+}
+
+table.mappingTable a {
+    text-decoration: none;
+}
+
+table.mappingTable a:hover {
+    text-decoration: underline;
+}
+
+table.mappingTable tr.isMatch td {
+    background: #f0f8f2;
+}
+
+table.mappingTable td.matchMark {
+    width: 1.5em;
+    text-align: center;
+    font-weight: 700;
+}
+
+table.mappingTable tr.isMatch td.matchMark {
+    color: #1f7a3a;
+}
+
+table.mappingTable tr.noMatch td.matchMark {
+    color: #9ca3af;
+}
+
+table.mappingTable td.relation {
+    white-space: nowrap;
+    color: #374151;
+}
+
+.termId {
+    margin-left: 4px;
+    font-size: 12px;
+    color: #6b7280;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.countedNote {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    font-style: italic;
+}
+
+details.unmappedTerms {
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+details.unmappedTerms summary {
+    cursor: pointer;
+    color: #1C2A66;
+}
+
+details.unmappedTerms ul {
+    margin: 6px 0 0;
+    padding-left: 20px;
+    columns: 2 18rem;
+    line-height: 1.5;
+}
+
+details.unmappedTerms li {
+    break-inside: avoid;
+}
+
+.mappingView .mappingKey {
+    margin: 0 0 8px;
+    max-width: 85ch;
+    font-size: 13px;
+    color: #4b5563;
+    line-height: 1.45;
+}
+
+table.mappingTable th:first-child {
+    white-space: normal;
+    font-size: 12px;
+    width: 5.5em;
+}
+
+/* Semantic similarity in the term mapping */
+.mappingSection + .mappingSection {
+    margin-top: 14px;
+}
+
+table.mappingTable tr.simFull td {
+    background: #e8f5ec;
+}
+
+table.mappingTable tr.simHigh td {
+    background: #f4faf6;
+}
+
+table.mappingTable td.simCell {
+    white-space: nowrap;
+    min-width: 9rem;
+}
+
+.simBar {
+    display: inline-block;
+    width: 3.5rem;
+    height: 0.5rem;
+    margin-right: 6px;
+    vertical-align: middle;
+    background: #e5e7eb;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.simBar > span {
+    display: block;
+    height: 100%;
+    background: #1f7a3a;
+}
+
+tr.simLow .simBar > span {
+    background: #9ca3af;
+}
+
+.simValue {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.linkNote {
+    display: block;
+    font-size: 12px;
+    color: #6b7280;
+    white-space: normal;
+}

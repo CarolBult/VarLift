@@ -288,6 +288,10 @@ function renderTables(name, gene) {
     const queryVariantHidden = ['Name', 'Submission', 'Gene Symbol', 'Biotype', 'refAA', 'protein_start', 'varAA',
                                 ...(org === 'human' ? ['MONDO_set'] : [])];
 
+    // Mouse Model Coverage: for human queries it comes before the mouse variants, as the
+    // overview of how many alleles could be evaluated ahead of the per-allele detail
+    const coverage = coverageSection(alleleCoverage, org === 'human' ? homolog : gene, org);
+
     // Create HTML tables
     results.innerHTML = `
         <div class='tableWrapper'>
@@ -301,6 +305,8 @@ function renderTables(name, gene) {
                               [...queryGenes.map(() => `${queryOrganism} Gene`), ...outputGenes.map(() => `${targetOrganism} Homolog`)])}
         </div>
 
+        ${org === 'human' ? coverage : ''}
+
         <div class='tableWrapper'>
             <h2>${targetOrganism} Variants</h2>
             ${jsonToHTMLTable(sortedOutputProteins.map(displayFields), "outputVariantTable")}
@@ -311,8 +317,10 @@ function renderTables(name, gene) {
             ${jsonToHTMLTable(sortedScores, "scoresTable")}
         </div>
 
+        ${org === 'human' ? phenotypeSimilaritySection(name, gene, sortedScores) : ''}
 
-        ${coverageSection(alleleCoverage, org === 'human' ? homolog : gene, org)}
+
+        ${org === 'human' ? '' : coverage}
 
         ${org === 'human' ? '' : `
         <div class='tableWrapper'>
@@ -372,9 +380,10 @@ function renderTables(name, gene) {
     });
 
     // Columns that are be hidden by default
-    // MP Terms Mapped/Total are diagnostics for the phenotype scores; they stay in the JSON download
-    // AlleleID is linked from the Allele Symbol instead
-    const scoreHiddenCols = ['Input Name', 'AlleleID', 'MP Terms Mapped', 'MP Terms Total'];
+    // AlleleID is linked from the Allele Symbol instead. Phenotype similarity has its own
+    // table below (one row per allele); its columns stay in the JSON download
+    const scoreHiddenCols = ['Input Name', 'AlleleID', 'Matched Disease(s)', 'Phenotype Score (variant)',
+                             'Phenotype Score (gene)', 'MP Terms Mapped', 'MP Terms Total'];
 
     // Criteria that don't apply to any row, such as the coding criteria for a splice-site variant
     const notApplicable = Object.keys(sortedScores[0] || {})
@@ -391,6 +400,7 @@ function renderTables(name, gene) {
 
 
     initCoverageTable(phenotypesByAllele);
+    initPhenotypeSimilarityTable(name);
 
 }
 
@@ -422,6 +432,167 @@ function initPhenotypeToggles(tableId, dataTable, phenotypesByAllele) {
 
 
 // Mouse Model Coverage table and its summary line
+// PHENOTYPE SIMILARITY (human queries)
+// One row per evaluated allele, in the order of the scoring table, with each phenotype
+// score and a button that opens the term mapping behind it in a row beneath the allele.
+
+function phenotypeSimilarityRows(name) {
+    return (window.fullJSON.phenotype_similarity || []).filter(row => row['Input Name'] === name);
+}
+
+function phenotypeSimilaritySection(name, gene, sortedScores) {
+    const rows = phenotypeSimilarityRows(name);
+    if (rows.length === 0) return '';
+
+    // Same allele order as the scoring table; symbols come from the score rows
+    const order = new Map();
+    const symbols = new Map();
+    sortedScores.forEach(r => {
+        if (!order.has(r['AlleleID'])) order.set(r['AlleleID'], order.size);
+        symbols.set(r['AlleleID'], r['Allele Symbol']);
+    });
+    rows.sort((a, b) => (order.get(a['AlleleID']) ?? Infinity) - (order.get(b['AlleleID']) ?? Infinity));
+
+    const score = v => (v === null || v === undefined) ? '<span class="naScore">—</span>' : Number(v).toFixed(2);
+    const button = (row, kind) =>
+        `<button type="button" class="phenotypeToggle mappingToggle" data-allele="${row['AlleleID']}" data-kind="${kind}" aria-expanded="false">Term mapping</button>`;
+
+    const body = rows.map(row => {
+        const aid = row['AlleleID'];
+        const symbol = symbols.get(aid) || aid;
+        return `<tr>
+            <td><a href="https://www.informatics.jax.org/allele/${aid}" target="_blank" rel="noopener noreferrer">${symbol}</a><br><span class="alleleId">${aid}</span></td>
+            <td>${escapeText(row['Matched Disease(s)'] || '')}</td>
+            <td class="scoreCell"><span class="scoreValue">${score(row['Phenotype Score (variant)'])}</span>${button(row, 'variant')}</td>
+            <td class="scoreCell"><span class="scoreValue">${score(row['Phenotype Score (gene)'])}</span>${button(row, 'gene')}</td>
+            <td>${row['MP Terms Mapped']} of ${row['MP Terms Total']}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+        <div class='tableWrapper'>
+            <h2>Phenotype Similarity</h2>
+            <p class="coverageSummary">How closely each evaluated allele's MGI phenotypes match the human phenotypes.
+            Mouse (MP) terms are translated to human (HPO) terms, and each translated term is matched to its closest
+            human term by semantic similarity (1 for the identical term, less for a broader, narrower or related term).
+            The score, from 0 to 1, is how much of the allele's phenotype the human terms account for.
+            <strong>Variant</strong> compares with each disease of the human variant and reports the best;
+            <strong>Gene</strong> compares with all HPO terms of ${escapeText(gene)}.
+            Open <em>Term mapping</em> to see every term behind a score.</p>
+            <table id="phenotypeSimilarityTable" class="table.dataTable">
+                <thead><tr>
+                    <th>Mouse Allele</th>
+                    <th>Matched Disease(s)</th>
+                    <th>Variant Phenotype Score</th>
+                    <th>Gene Phenotype Score</th>
+                    <th>MP Terms Mapped to HPO</th>
+                </tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>`;
+}
+
+function initPhenotypeSimilarityTable(name) {
+    const table = $('#phenotypeSimilarityTable');
+    if (table.length === 0) return;
+    const dataTable = table.DataTable({ ordering: false });
+    const byAllele = new Map(phenotypeSimilarityRows(name).map(row => [row['AlleleID'], row]));
+
+    // One mapping open per allele: the other score's button switches it, the same button closes it
+    $('#phenotypeSimilarityTable tbody').on('click', 'button.mappingToggle', function () {
+        const tr = $(this).closest('tr');
+        const row = dataTable.row(tr);
+        const kind = this.dataset.kind;
+        const open = row.child.isShown() && tr.attr('data-open') === kind;
+
+        tr.find('button.mappingToggle').attr('aria-expanded', 'false');
+        if (open) {
+            row.child.hide();
+            tr.removeAttr('data-open');
+        } else {
+            row.child(mappingView(byAllele.get(this.dataset.allele), kind)).show();
+            tr.attr('data-open', kind);
+            this.setAttribute('aria-expanded', 'true');
+        }
+    });
+}
+
+// The terms behind one phenotype score. Each mouse term is translated to HPO, then compared
+// with its closest human term by semantic similarity (1 = the identical term)
+function mappingView(row, kind) {
+    const m = row[kind === 'variant' ? 'Variant Mapping' : 'Gene Mapping'];
+    const link = (url, label, id) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${escapeText(label || id)}</a> <span class="termId">${id}</span>`;
+    const mpTerm = (id, label) => link(`https://www.informatics.jax.org/vocab/mp_ontology/${id}`, label, id);
+    const hpTerm = (id, label) => link(`https://hpo.jax.org/browse/term/${id}`, label, id);
+    const byName = (a, b) => String(a.mp_name || a.mp).localeCompare(String(b.mp_name || b.mp), undefined, {sensitivity: 'base'});
+
+    // Terms outside the score: no HPO translation, or general terms that are not scored
+    const listOf = (items, summary) => items && items.length
+        ? `<details class="unmappedTerms"><summary>${summary(items.length)}</summary>
+            <ul>${[...items].sort(byName).map(u => `<li>${mpTerm(u.mp, u.mp_name)}</li>`).join('')}</ul></details>`
+        : '';
+    const notScored = listOf(m && m.not_scored, n => `${n} general term${n === 1 ? '' : 's'} not scored (top-level system terms and "no abnormal phenotype detected")`);
+    const unmapped = listOf(m && m.unmapped, n => `${n} mouse phenotype${n === 1 ? '' : 's'} with no HPO translation (not part of the score)`);
+
+    if (!m || m.total_mp_count === 0) {
+        return `<div class="mappingView"><p class="mappingNote">${m && m.not_scored && m.not_scored.length
+            ? 'This allele has only general MGI phenotype terms, which are not scored, so there is nothing to compare.'
+            : 'This allele has no MGI phenotype annotations, so there is nothing to compare.'}</p>${notScored}</div>`;
+    }
+    if (!m.sections || m.sections.length === 0) {
+        const why = kind === 'variant'
+            ? 'none of the variant\'s diseases has HPO phenotype annotations, or none of the allele\'s phenotypes translates to HPO.'
+            : 'the human gene has no HPO annotations, or none of the allele\'s phenotypes translates to HPO.';
+        return `<div class="mappingView"><p class="mappingNote">No ${kind} phenotype score: ${why}</p>${unmapped}${notScored}</div>`;
+    }
+
+    const key = `<p class="mappingKey"><strong>Translation</strong>: how closely the mouse term corresponds to an HPO term
+        (exact 1, narrow or broad 0.75, close 0.5, related 0.25), with the weight it carries.
+        <strong>Similarity</strong>: how close that HPO term is to the nearest ${kind === 'variant' ? "disease" : "gene"} HPO term,
+        from the HPO hierarchy and how specific the terms are: 1 for the identical term, high for a parent or child,
+        0 when they share no more than an organ system.</p>`;
+
+    const linkText = p => ({
+        'identical': 'identical',
+        'mouse term more specific': 'mouse term is more specific',
+        'mouse term more general': 'mouse term is more general',
+        'shared ancestor': p.mica ? `related through ${escapeText(p.mica_name || p.mica)}` : 'related',
+    }[p.link] || '');
+    const level = s => s >= 0.999 ? 'simFull' : s >= 0.5 ? 'simHigh' : s > 0 ? 'simLow' : 'simNone';
+
+    const section = sec => {
+        const pairs = [...sec.pairs].sort((a, b) => (b.similarity - a.similarity) || byName(a, b));
+        const heading = kind === 'variant'
+            ? `Compared with the HPO terms of <strong>${escapeText(sec.reference)}</strong>`
+            : 'Compared with all HPO terms of the human gene';
+        const rows = pairs.map(p => `
+            <tr class="${level(p.similarity)}">
+                <td>${mpTerm(p.mp, p.mp_name)}</td>
+                <td class="relation">${(p.relation || '').replace('Match', '') || 'mapped'} <span class="termId">${p.weight}</span></td>
+                <td>${hpTerm(p.hp, p.hp_name)}${p.counted ? '' : '<span class="countedNote">counted under another mouse term</span>'}</td>
+                <td>${p.human_hp ? hpTerm(p.human_hp, p.human_hp_name) : '<span class="naScore">none related</span>'}</td>
+                <td class="simCell"><span class="simBar"><span style="width:${Math.round(p.similarity * 100)}%"></span></span>
+                    <span class="simValue">${Number(p.similarity).toFixed(2)}</span>
+                    ${p.human_hp ? `<span class="linkNote">${linkText(p)}</span>` : ''}</td>
+            </tr>`).join('');
+        return `<div class="mappingSection">
+            <p class="mappingNote">${heading}: <strong>score ${Number(sec.score).toFixed(2)}</strong>
+                = weight × similarity summed (${sec.matched_weight}) ÷ weight summed (${sec.total_weight}).
+                Each HPO term counts once, at its strongest translation.</p>
+            <div class="mappingScroll"><table class="mappingTable">
+                <thead><tr><th>Mouse phenotype (MP)</th><th>Translation, weight</th><th>Translated to (HPO)</th>
+                    <th>Closest ${kind === 'variant' ? 'disease' : 'gene'} term (HPO)</th><th>Similarity</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table></div></div>`;
+    };
+
+    const tie = m.sections.length > 1
+        ? `<p class="mappingNote">${m.sections.length} diseases tie for the best score; each is shown with its own comparison.</p>`
+        : '';
+    return `<div class="mappingView">${tie}${key}${m.sections.map(section).join('')}${unmapped}${notScored}</div>`;
+}
+
+
 function coverageSection(alleleCoverage, gene, org) {
     const total = alleleCoverage.length;
     let summary;
@@ -598,8 +769,28 @@ function mondoLink(id) {
 
 
 // Link for an HPO term ID
-function hpLink(id) {
-    return `<a href="https://hpo.jax.org/browse/term/${id}" target="_blank" rel="noopener noreferrer">${id}</a>`;
+// HP terms as a list sorted by name: the term name links to HPO, its ID follows in small grey text.
+// Names come from the server with the results; a term without one shows its ID only.
+function hpTermList(ids) {
+    const names = (window.fullJSON && window.fullJSON.hp_names) || {};
+    const terms = [...new Set(ids)]
+        .map(id => ({id, name: names[id] || ''}))
+        .sort((a, b) => (a.name === '') - (b.name === '')
+            || a.name.localeCompare(b.name, undefined, {sensitivity: 'base'})
+            || a.id.localeCompare(b.id));
+    const items = terms.map(({id, name}) => {
+        const url = `https://hpo.jax.org/browse/term/${id}`;
+        const label = name ? escapeText(name) : id;
+        const idTag = name ? ` <span class="hpId">${id}</span>` : '';
+        return `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>${idTag}</li>`;
+    });
+    return `<ul class="hpTermList">${items.join('')}</ul>`;
+}
+
+
+// Escape text from data files before it goes into HTML
+function escapeText(text) {
+    return String(text).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 }
 
 
@@ -734,7 +925,7 @@ function formatCell(row, col, tableId, org) {
     else if (['HP_IDs_variant', 'HP_IDs_gene'].includes(col) && Array.isArray(value)) {
         const count = value.length;
         value = count === 0 ? 'None' : `<details class="termDropdown"><summary>${count} HP term${count === 1 ? '' : 's'}</summary>`
-            + `<div class="phenotypeList">${value.map(hpLink).join('<br>')}</div></details>`;
+            + hpTermList(value) + '</details>';
     }
 
     // MONDO IDs link to their disease pages

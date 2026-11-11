@@ -12,6 +12,8 @@ data:
 
   hpoa: "https://purl.obolibrary.org/obo/hp/hpoa/phenotype.hpoa"
   genes_to_phenotype: "https://purl.obolibrary.org/obo/hp/hpoa/genes_to_phenotype.txt"
+  hp_obo: "https://purl.obolibrary.org/obo/hp.obo"
+  mp_obo: "https://purl.obolibrary.org/obo/mp.obo"
 
   mgi_alleles: "https://fms.alliancegenome.org/download/VARIANT-ALLELE_NCBITaxon10090.tsv.gz"
   mgi_homology: "https://www.informatics.jax.org/downloads/reports/HOM_ProteinCoding.rpt"
@@ -55,6 +57,8 @@ paths:
 
   hpoa: "app/data/HPO/phenotype.hpoa"
   genes_to_phenotype: "app/data/HPO/genes_to_phenotype.txt"
+  hp_obo: "app/data/HPO/hp.obo"
+  mp_obo: "app/data/MGI/mp.obo"
 
   ensembl_hum_gff3: "app/data/Ensembl/Homo_sapiens.GRCh38.{ensemble_version}.gff3.gz"
   ensembl_mus_gff3: "app/data/Ensembl/Mus_musculus.GRCm39.{ensemble_version}.gff3.gz"

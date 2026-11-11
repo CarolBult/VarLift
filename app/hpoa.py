@@ -25,6 +25,93 @@ _DISEASE_TO_HP = None       # {OMIM:/ORPHA:/DECIPHER: id -> set of HP:... string
 _GENE_TO_HP = None          # {gene_symbol -> set of HP:... strings}
 _DISEASE_NAMES = None     # {OMIM:/ORPHA:/DECIPHER: id -> disease name string}
 _MONDO_TO_XREFS = None      # {MONDO:id -> set of other disease IDs}
+_HP_NAMES = None            # {HP:id (and alt_id) -> term name}
+_HP_CURRENT = None          # {retired or obsolete HP:id -> the current term's HP:id}
+
+
+def _load_hp_obo():
+    '''
+    Read hp.obo once for two things:
+      - term names, with each alt_id given the name of the term it was merged into
+      - the current term for retired IDs (alt_id) and obsolete terms (replaced_by)
+    Falls back to the names in genes_to_phenotype.txt, and no ID updates, when
+    hp.obo hasn't been downloaded (python app/data_refresh.py fetches it).
+    '''
+    global _HP_NAMES, _HP_CURRENT
+    from pathlib import Path
+    names, current = {}, {}
+    path = Path(_config['paths']['hp_obo'])
+    if path.exists():
+        term = {}
+
+        def _finish(term):
+            tid = term.get('id')
+            if not tid:
+                return
+            if term.get('name'):
+                names[tid] = term['name']
+            for alt in term['alt']:
+                current[alt] = tid
+            if term.get('obsolete') and term.get('replaced_by'):
+                current[tid] = term['replaced_by']
+
+        with open(path, encoding='utf-8') as f:
+            for line in f:
+                line = line.rstrip('\n')
+                if line.startswith('['):
+                    _finish(term)
+                    term = {'alt': []} if line == '[Term]' else {}
+                elif not term:
+                    continue
+                elif line.startswith('id: HP:'):
+                    term['id'] = line[4:]
+                elif line.startswith('name: '):
+                    term['name'] = line[6:]
+                elif line.startswith('alt_id: HP:'):
+                    term['alt'].append(line[8:])
+                elif line == 'is_obsolete: true':
+                    term['obsolete'] = True
+                elif line.startswith('replaced_by: HP:'):
+                    term['replaced_by'] = line[len('replaced_by: '):]
+        _finish(term)
+        # A retired ID shows the name of the term it was merged into
+        for old, new in current.items():
+            if old not in names and new in names:
+                names[old] = names[new]
+        logging.info(f'hp.obo: {len(names)} HP term names, {len(current)} retired or obsolete IDs')
+    else:
+        df = pd.read_csv(_config['paths']['genes_to_phenotype'], sep='\t', comment='#', dtype=str,
+                         usecols=['hpo_id', 'hpo_name']).dropna().drop_duplicates('hpo_id')
+        names = dict(zip(df['hpo_id'], df['hpo_name']))
+        logging.info(f'hp.obo not found; {len(names)} HP term names from genes_to_phenotype.txt')
+    _HP_NAMES, _HP_CURRENT = names, current
+
+
+def hp_names(hp_ids):
+    '''{HP ID: term name} for the given IDs; IDs without a known name are left out.'''
+    if _HP_NAMES is None:
+        _load_hp_obo()
+    return {h: _HP_NAMES[h] for h in hp_ids if h in _HP_NAMES}
+
+
+def current_hp_ids(hp_ids):
+    '''
+    The given HP IDs with retired and obsolete ones replaced by their current
+    term, without duplicates, sorted. ClinVar still cites some old IDs, e.g.
+    HP:0000624 and HP:0007930, which are both now Epicanthus (HP:0000286).
+    '''
+    if _HP_CURRENT is None:
+        _load_hp_obo()
+    out = set()
+    for h in hp_ids:
+        seen = set()
+        # Follow the chain in case a replacement was itself later retired
+        while h in _HP_CURRENT and h not in seen:
+            seen.add(h)
+            h = _HP_CURRENT[h]
+        out.add(h)
+    return sorted(out)
+
 
 def _build_mondo_xrefs():
     '''Invert mondo_xref_map (xref -> MONDO) into MONDO -> set of xrefs.'''
