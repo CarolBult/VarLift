@@ -110,6 +110,30 @@ def _write(df, path):
     df.to_parquet(path, index=False)
 
 
+VARIANTS_PER_CHUNK = 200
+
+
+def score_in_chunks(protein_df, mouse_prt_df, input_genes, mouse_phenotype_df):
+    '''
+    hvar_query_score over a few hundred ClinVar variants at a time.
+
+    Each score row depends only on its own variant and mouse allele, so the
+    result matches scoring everything at once. Scoring a large gene (TP53) in
+    one pass builds a wide variant x allele table that ran out of memory.
+    '''
+    names = protein_df['Name'].unique()
+    chunks = []
+    for i in range(0, len(names), VARIANTS_PER_CHUNK):
+        chunk_names = names[i:i + VARIANTS_PER_CHUNK]
+        chunk = hvar_query_score(protein_df[protein_df['Name'].isin(chunk_names)].copy(),
+                                 mouse_prt_df.copy(),
+                                 input_genes[input_genes['Input Name'].isin(chunk_names)],
+                                 mouse_phenotype_df=mouse_phenotype_df)
+        if not chunk.empty:
+            chunks.append(chunk)
+    return pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame()
+
+
 def run_gene(gene, out_dir):
     '''Score one gene's ClinVar variants and write its files. Returns a summary dict.'''
     # Clear results from an earlier run so a rerun can't leave stale files behind
@@ -144,7 +168,7 @@ def run_gene(gene, out_dir):
     if not protein_df.empty:
         _, mouse_prt_df, mouse_phenotype_df, input_genes, _ = mvar_fetch(input_genes)
         summary['Mouse Alleles'] = mouse_prt_df['AlleleID'].nunique() if not mouse_prt_df.empty else 0
-        scores = hvar_query_score(protein_df, mouse_prt_df, input_genes, mouse_phenotype_df=mouse_phenotype_df)
+        scores = score_in_chunks(protein_df, mouse_prt_df, input_genes, mouse_phenotype_df)
 
     if scores.empty:
         summary['Status'] = 'no mouse alleles to score against'

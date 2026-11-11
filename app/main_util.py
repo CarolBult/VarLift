@@ -347,6 +347,10 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
 
     expanded_df = gene_inputs.merge(hum_prt_df, left_on='Input Name', right_on='Name', suffixes=('', '_human'))
     expanded_df = expanded_df.merge(mouse_prt_df, left_on='Mus Gene', right_on='Gene Symbol', suffixes=('_human', '_mouse'))
+    # None of the variants' homologs have mouse alleles (e.g. a variant VEP places only in an overlapping gene)
+    if expanded_df.empty:
+        logging.info('No mouse alleles for the variants\' homologs.')
+        return pd.DataFrame()
 
     score_df = pd.DataFrame()
     score_df['Input Name'] = expanded_df['Input Name']
