@@ -552,8 +552,10 @@ button.phenotypeToggle[aria-expanded="true"]::before {
 
 .phenotypeList {
     padding: 4px 12px;
-    line-height: 1.6;
-    columns: 2;
+}
+
+.phenotypeList > ul.hpTermList + .normalPhenotypes {
+    margin-top: 10px;
 }
 
 /* Systems or phenotypes MGI examined and found normal, set apart from the abnormal ones */
@@ -568,6 +570,11 @@ button.phenotypeToggle[aria-expanded="true"]::before {
 
 .normalPhenotypes a {
     color: #4a5560;
+}
+
+.normalPhenotypes ul.hpTermList {
+    background: #fff;
+    border-color: #dfe3e8;
 }
 
 .normalHeading {

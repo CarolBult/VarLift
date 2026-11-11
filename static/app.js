@@ -529,7 +529,7 @@ function mappingView(row, kind) {
     // Terms outside the score: no HPO translation, or general terms that are not scored
     const listOf = (items, summary) => items && items.length
         ? `<details class="unmappedTerms"><summary>${summary(items.length)}</summary>
-            <ul>${[...items].sort(byName).map(u => `<li>${mpTerm(u.mp, u.mp_name)}</li>`).join('')}</ul></details>`
+            ${termList(items.map(u => ({id: u.mp, name: u.mp_name || ''})))}</details>`
         : '';
     const notScored = listOf(m && m.not_scored, n => `${n} general term${n === 1 ? '' : 's'} not scored (top-level system terms and "no abnormal phenotype detected")`);
     const unmapped = listOf(m && m.unmapped, n => `${n} mouse phenotype${n === 1 ? '' : 's'} with no HPO translation (not part of the score)`);
@@ -729,21 +729,15 @@ function phenotypeLists(phenotypes, normal) {
 }
 
 
-// Turn "ID,label" phenotype strings into links, one per line
+// "ID,label" phenotype strings as a term list (see termList)
 function phenotypeLinks(phenotypes) {
-    return phenotypes
-        .map(v => {
-            // Split on the first comma only; labels can contain commas
-            const text = String(v);
-            const comma = text.indexOf(',');
-            const id = text.slice(0, comma).trim();
-            const label = text.slice(comma + 1).trim();
-            const url = id.startsWith('MP:')
-                ? `https://www.informatics.jax.org/vocab/mp_ontology/${id}`
-                : `http://purl.obolibrary.org/obo/HP_${id.split(':')[1]}`;
-            return `<a href="${url}" target="_blank" rel="noopener noreferrer">${id}: ${label}</a>`;
-        })
-        .join('<br>');
+    return termList(phenotypes.map(v => {
+        // Split on the first comma only; labels can contain commas
+        const text = String(v);
+        const comma = text.indexOf(',');
+        return comma < 0 ? {id: text.trim(), name: ''}
+            : {id: text.slice(0, comma).trim(), name: text.slice(comma + 1).trim()};
+    }));
 }
 
 
@@ -791,17 +785,27 @@ function mondoLink(id) {
 // Names come from the server with the results; a term without one shows its ID only.
 function hpTermList(ids) {
     const names = (window.fullJSON && window.fullJSON.hp_names) || {};
-    const terms = [...new Set(ids)]
-        .map(id => ({id, name: names[id] || ''}))
+    return termList([...new Set(ids)].map(id => ({id, name: names[id] || ''})));
+}
+
+
+// A list of ontology terms (HP or MP), one per row: the name, linked, with its ID in grey
+// after it, sorted by name (terms without a name last)
+function termList(terms) {
+    const seen = new Set();
+    const items = terms
+        .filter(({id}) => !seen.has(id) && seen.add(id))
         .sort((a, b) => (a.name === '') - (b.name === '')
             || a.name.localeCompare(b.name, undefined, {sensitivity: 'base'})
-            || a.id.localeCompare(b.id));
-    const items = terms.map(({id, name}) => {
-        const url = `https://hpo.jax.org/browse/term/${id}`;
-        const label = name ? escapeText(name) : id;
-        const idTag = name ? ` <span class="hpId">${id}</span>` : '';
-        return `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>${idTag}</li>`;
-    });
+            || a.id.localeCompare(b.id))
+        .map(({id, name}) => {
+            const url = id.startsWith('MP:')
+                ? `https://www.informatics.jax.org/vocab/mp_ontology/${id}`
+                : `https://hpo.jax.org/browse/term/${id}`;
+            const label = name ? escapeText(name) : id;
+            const idTag = name ? ` <span class="hpId">${id}</span>` : '';
+            return `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>${idTag}</li>`;
+        });
     return `<ul class="hpTermList">${items.join('')}</ul>`;
 }
 
@@ -942,7 +946,7 @@ function formatCell(row, col, tableId, org) {
         value = phenotypeLinks(value);
     }
     else if (col === 'Normal Phenotypes' && Array.isArray(value)) {
-        value = value.length ? `<span class="normalPhenotypes">${phenotypeLinks(value)}</span>` : '';
+        value = value.length ? `<div class="normalPhenotypes">${phenotypeLinks(value)}</div>` : '';
     }
 
     // HP term lists open in a dropdown
