@@ -416,7 +416,8 @@ def phenotype_similarity(hum_prt_df, pairs, mouse_phenotype_df, detail=False):
     Parameters
         hum_prt_df: DataFrame. Human variants with Name, MONDO and HP_IDs_gene.
         pairs: DataFrame. Input Name and AlleleID of each (variant, allele) to score.
-        mouse_phenotype_df: DataFrame. AlleleID and Phenotypes ("MP:...,label" strings).
+        mouse_phenotype_df: DataFrame. AlleleID, Phenotypes (abnormal) and optionally Normal
+            Phenotypes, as lists of "MP:...,label" strings. Normal annotations are not scored.
         detail: bool. Also return the term mapping behind each score, for display:
             'Variant Mapping' and 'Gene Mapping' (see phenotype_mapping_detail).
 
@@ -440,6 +441,14 @@ def phenotype_similarity(hum_prt_df, pairs, mouse_phenotype_df, detail=False):
                     mp, _, label = p.partition(',')
                     allele_to_mp.setdefault(aid, set()).add(mp)
                     mp_names[mp] = label.strip()
+
+    # Normal (NOT) annotations are kept out of the scores; the mapping view lists them
+    allele_to_normal = {}
+    if detail and 'Normal Phenotypes' in mouse_phenotype_df.columns:
+        for aid, phenos in mouse_phenotype_df[['AlleleID', 'Normal Phenotypes']].itertuples(index=False):
+            for p in phenos if isinstance(phenos, list) else []:
+                mp, _, label = p.partition(',')
+                allele_to_normal.setdefault(aid, {})[mp] = label.strip()
 
     variants = hum_prt_df.drop_duplicates(subset=['Name']).set_index('Name')
     def _list(name, col):
@@ -479,11 +488,13 @@ def phenotype_similarity(hum_prt_df, pairs, mouse_phenotype_df, detail=False):
             # Each mapping lists one section per human reference: the variant's tied
             # top disease(s), each with its own arithmetic, or the human gene
             not_scored = [{'mp': mp, 'mp_name': mp_names.get(mp)} for mp in sorted(unscored)]
+            normal = [{'mp': mp, 'mp_name': label}
+                      for mp, label in sorted(allele_to_normal.get(aid, {}).items(), key=lambda x: x[1])]
 
             def _mapping(score, sections):
                 base = sections[0][1] if sections else phenotype_mapping_detail(mp_terms, set(), mp_names)
                 return {'score': score, 'total_mp_count': base['total_mp_count'],
-                        'unmapped': base['unmapped'], 'not_scored': not_scored,
+                        'unmapped': base['unmapped'], 'not_scored': not_scored, 'normal': normal,
                         'sections': [dict(d, reference=ref) for ref, d in sections]}
 
             seen, variant_sections = set(), []

@@ -556,6 +556,26 @@ button.phenotypeToggle[aria-expanded="true"]::before {
     columns: 2;
 }
 
+/* Systems or phenotypes MGI examined and found normal, set apart from the abnormal ones */
+.normalPhenotypes {
+    break-inside: avoid;
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-left: 3px solid #9aa5b1;
+    background: #f3f5f7;
+    color: #4a5560;
+}
+
+.normalPhenotypes a {
+    color: #4a5560;
+}
+
+.normalHeading {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
 
 /* DETAILS */
 .details {

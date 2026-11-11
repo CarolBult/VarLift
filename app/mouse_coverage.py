@@ -12,7 +12,7 @@ import re
 
 from app.gene_util import mus_alleles_df
 from app.disease_util import MGI_disease_df, fetch_mus_doid, map_doids_to_mondo
-from app.phenotype_util import MGI_phenotype_df
+from app.phenotype_util import allele_phenotypes
 
 
 def _load_variant_allele():
@@ -113,8 +113,8 @@ def allele_coverage_for_gene(gene_symbol, evaluated_allele_ids, all_alleles=Fals
     coverage = pd.DataFrame(rows, columns=cols)
 
     if all_alleles:
-        phenotypes = MGI_phenotype_df['Phenotypes'].str.split('|').to_dict()
-        coverage['Phenotypes'] = coverage['AlleleID'].map(lambda a: phenotypes.get(a, []))
+        coverage['Phenotypes'] = coverage['AlleleID'].map(lambda a: allele_phenotypes(a)[0])
+        coverage['Normal Phenotypes'] = coverage['AlleleID'].map(lambda a: allele_phenotypes(a)[1])
     return coverage
 
 
@@ -144,8 +144,8 @@ def mgi_alleles_at(variants):
     matched['Associated Diseases'] = matched['AlleleID'].map(lambda a: mondo_terms.get(a, []))
     matched['MONDO'] = matched['AlleleID'].map(lambda a: mondo_ids.get(a, []))
 
-    phenotypes = MGI_phenotype_df['Phenotypes'].str.split('|').to_dict()
-    matched['Phenotypes'] = matched['AlleleID'].map(lambda a: phenotypes.get(a, []))
+    matched['Phenotypes'] = matched['AlleleID'].map(lambda a: allele_phenotypes(a)[0])
+    matched['Normal Phenotypes'] = matched['AlleleID'].map(lambda a: allele_phenotypes(a)[1])
 
     return matched
 

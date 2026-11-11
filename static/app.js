@@ -423,8 +423,8 @@ function initPhenotypeToggles(tableId, dataTable, phenotypesByAllele) {
             row.child.hide();
             this.setAttribute('aria-expanded', 'false');
         } else {
-            const phenos = phenotypesByAllele.get(this.dataset.allele).Phenotypes;
-            row.child(`<div class="phenotypeList">${phenotypeLinks(phenos)}</div>`).show();
+            const allele = phenotypesByAllele.get(this.dataset.allele);
+            row.child(`<div class="phenotypeList">${phenotypeLists(allele.Phenotypes, allele['Normal Phenotypes'])}</div>`).show();
             this.setAttribute('aria-expanded', 'true');
         }
     });
@@ -533,17 +533,22 @@ function mappingView(row, kind) {
         : '';
     const notScored = listOf(m && m.not_scored, n => `${n} general term${n === 1 ? '' : 's'} not scored (top-level system terms and "no abnormal phenotype detected")`);
     const unmapped = listOf(m && m.unmapped, n => `${n} mouse phenotype${n === 1 ? '' : 's'} with no HPO translation (not part of the score)`);
+    const normal = listOf(m && m.normal, n => `${n} system${n === 1 ? '' : 's'} or phenotype${n === 1 ? '' : 's'} MGI recorded as <strong>normal</strong> (examined, no abnormality found; not part of the score)`);
+    const outside = `${normal}${unmapped}${notScored}`;
 
     if (!m || m.total_mp_count === 0) {
-        return `<div class="mappingView"><p class="mappingNote">${m && m.not_scored && m.not_scored.length
+        const why = m && m.not_scored && m.not_scored.length
             ? 'This allele has only general MGI phenotype terms, which are not scored, so there is nothing to compare.'
-            : 'This allele has no MGI phenotype annotations, so there is nothing to compare.'}</p>${notScored}</div>`;
+            : m && m.normal && m.normal.length
+                ? 'MGI records only normal findings for this allele, so there is no abnormal phenotype to compare.'
+                : 'This allele has no MGI phenotype annotations, so there is nothing to compare.';
+        return `<div class="mappingView"><p class="mappingNote">${why}</p>${outside}</div>`;
     }
     if (!m.sections || m.sections.length === 0) {
         const why = kind === 'variant'
             ? 'none of the variant\'s diseases has HPO phenotype annotations, or none of the allele\'s phenotypes translates to HPO.'
             : 'the human gene has no HPO annotations, or none of the allele\'s phenotypes translates to HPO.';
-        return `<div class="mappingView"><p class="mappingNote">No ${kind} phenotype score: ${why}</p>${unmapped}${notScored}</div>`;
+        return `<div class="mappingView"><p class="mappingNote">No ${kind} phenotype score: ${why}</p>${outside}</div>`;
     }
 
     const key = `<p class="mappingKey"><strong>Translation</strong>: how closely the mouse term corresponds to an HPO term
@@ -589,7 +594,7 @@ function mappingView(row, kind) {
     const tie = m.sections.length > 1
         ? `<p class="mappingNote">${m.sections.length} diseases tie for the best score; each is shown with its own comparison.</p>`
         : '';
-    return `<div class="mappingView">${tie}${key}${m.sections.map(section).join('')}${unmapped}${notScored}</div>`;
+    return `<div class="mappingView">${tie}${key}${m.sections.map(section).join('')}${outside}</div>`;
 }
 
 
@@ -637,6 +642,8 @@ function initCoverageTable(phenotypesByAllele) {
     // AlleleID, which is shown beneath the allele symbol
     alleleCoverageTable.column(headers.indexOf('Gene Symbol')).visible(false);
     alleleCoverageTable.column(headers.indexOf('AlleleID')).visible(false);
+    // Normal findings open with the abnormal ones in the Phenotypes dropdown
+    if (headers.includes('Normal Phenotypes')) alleleCoverageTable.column(headers.indexOf('Normal Phenotypes')).visible(false);
 
     initPhenotypeToggles('alleleCoverageTable', alleleCoverageTable, phenotypesByAllele);
 }
@@ -658,11 +665,12 @@ function renderUnevaluated(name) {
     // (alleles already listed in the coverage table are left out)
     const listed = new Set(alleleCoverage.map(row => row['AlleleID']));
     const phenotypes = matches
-        .filter(row => !isEmpty(row['Phenotypes']) && !listed.has(row['AlleleID']))
-        .map(row => ({AlleleID: row['AlleleID'], AlleleSymbol: row['AlleleSymbol'], Phenotypes: row['Phenotypes']}));
+        .filter(row => (!isEmpty(row['Phenotypes']) || !isEmpty(row['Normal Phenotypes'])) && !listed.has(row['AlleleID']))
+        .map(row => ({AlleleID: row['AlleleID'], AlleleSymbol: row['AlleleSymbol'], Phenotypes: row['Phenotypes'] || [],
+                      'Normal Phenotypes': row['Normal Phenotypes'] || []}));
 
     // Biotype is a gene property, shown only in the Genes table
-    const rows = matches.map(({Phenotypes, Biotype, ...row}) => displayFields({
+    const rows = matches.map(({Phenotypes, 'Normal Phenotypes': _normal, Biotype, ...row}) => displayFields({
         ...row,
         'Associated Diseases': isEmpty(row['Associated Diseases']) ? 'None reported' : row['Associated Diseases']
     }));
@@ -708,6 +716,16 @@ function renderUnevaluated(name) {
     });
 
     initCoverageTable(new Map(alleleCoverage.map(row => [row['AlleleID'], row])));
+}
+
+
+// An allele's abnormal phenotypes, then the systems or phenotypes MGI recorded as normal
+function phenotypeLists(phenotypes, normal) {
+    const abnormal = phenotypes && phenotypes.length ? phenotypeLinks(phenotypes) : '';
+    const normalList = normal && normal.length
+        ? `<div class="normalPhenotypes"><span class="normalHeading">Normal: examined, no abnormality found</span>${phenotypeLinks(normal)}</div>`
+        : '';
+    return abnormal + normalList;
 }
 
 
@@ -913,12 +931,18 @@ function formatCell(row, col, tableId, org) {
     // Allele table phenotypes open in a dropdown beneath the row
     if (col === 'Phenotypes' && tableId === 'alleleCoverageTable') {
         const count = value.length;
-        value = count === 0 ? 'None' : `<button type="button" class="phenotypeToggle" data-allele="${row['AlleleID']}" aria-expanded="false">${count} phenotype${count === 1 ? '' : 's'}</button>`;
+        const normal = (row['Normal Phenotypes'] || []).length;
+        const label = [count ? `${count} phenotype${count === 1 ? '' : 's'}` : '', normal ? `${normal} normal` : '']
+            .filter(Boolean).join(', ');
+        value = !label ? 'None' : `<button type="button" class="phenotypeToggle" data-allele="${row['AlleleID']}" aria-expanded="false">${label}</button>`;
     }
 
     // Seperate Phenotypes into multiple lines
     else if (col === 'Phenotypes' && Array.isArray(value)) {
         value = phenotypeLinks(value);
+    }
+    else if (col === 'Normal Phenotypes' && Array.isArray(value)) {
+        value = value.length ? `<span class="normalPhenotypes">${phenotypeLinks(value)}</span>` : '';
     }
 
     // HP term lists open in a dropdown
