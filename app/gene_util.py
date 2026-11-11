@@ -22,6 +22,10 @@ homology_df = pd.read_csv(config['paths']['mgi_homology'],
                           sep='\t', names=['MGI_ID', 'MusGeneSymbol', 'MusEntrezGeneID', 
                                            'Mus_HGNC_ID', 'HumGeneSymbol', 'HumEntrezGeneID'])
 
+# NCBI Gene IDs keyed by gene accession (MGI ID for mouse, HGNC ID for human)
+ncbi_gene_ids = {**dict(zip(homology_df['MGI_ID'], homology_df['MusEntrezGeneID'].astype(str))),
+                 **dict(zip(homology_df['Mus_HGNC_ID'], homology_df['HumEntrezGeneID'].astype(str)))}
+
 # Load Mus alleles
 mus_alleles_df = pd.read_csv(config['paths']['mgi_alleles'], sep='\t', compression='gzip', low_memory=False,
                              skiprows=count_header_lines(config['paths']['mgi_alleles']))
@@ -114,7 +118,11 @@ def fetch_gene_info(genes, species='human'):
     subset.rename(columns={'Name': 'Gene Symbol', 'biotype': 'Biotype', 'seqid': 'Chromosome', 'start': 'Start', 
                            'end': 'End', 'strand': 'Strand', 'gene_id': 'Ensembl_ID'}, inplace=True)
     
-    subset = subset[['Gene Symbol', 'Description', 'Biotype', 'Chromosome', 'Start', 'End', 'Strand', 'Ensembl_ID', 'Accession']]
+    # NCBI Gene ID from the MGI homology report (protein-coding genes with a human-mouse homolog)
+    subset['NCBI_Gene_ID'] = subset['Accession'].map(ncbi_gene_ids)
+
+    subset = subset[['Gene Symbol', 'Description', 'Biotype', 'Chromosome', 'Start', 'End', 'Strand', 'Ensembl_ID',
+                     'NCBI_Gene_ID', 'Accession']]
 
     return subset
 

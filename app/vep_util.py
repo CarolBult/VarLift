@@ -264,7 +264,7 @@ def prepare_vep_output(vep_df):
     
     Returns:
         DataFrame. Containing Transcript ID, Gene Symbol, HGVS, Biotype, Exon Rank, Pfam Domain ID, Pfam Domain Name, Polyphen Prediction
-        Polyphen Score, Molecular Consequence, Codon Switch, Amino Acids, refAA, varAA.
+        Polyphen Score, Molecular Consequence, Sequence Change, Amino Acids, refAA, varAA.
     '''
     # Splice-site and intronic variants have no protein fields, and scoring compares
     # intron fields for every variant, so these are always present
@@ -330,13 +330,13 @@ def prepare_vep_output(vep_df):
                        'exon': 'Exon Rank', 'intron': 'Intron Rank', 'intron_offset': 'Intron Offset',
                        'Domain': 'Pfam Domain ID', 'domain_name': 'Pfam Domain Name',
                        'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score',
-                       'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'},
+                       'consequence_terms': 'Molecular Consequence', 'codons': 'Sequence Change', 'amino_acids': 'Amino Acids'},
                        inplace=True,  errors='ignore')
 
 #    protein_df.rename(columns={'transcript_id': 'Transcript ID', 'gene_symbol': 'Gene Symbol', 'biotype': 'Biotype', 
 #                       'exon': 'Exon Rank', 'Domain': 'Pfam Domain ID', 
 #                       'polyphen_prediction': 'Polyphen Prediction', 'polyphen_score': 'Polyphen Score', 
-#                       'consequence_terms': 'Molecular Consequence', 'codons': 'Codon Switch', 'amino_acids': 'Amino Acids'}, 
+#                       'consequence_terms': 'Molecular Consequence', 'codons': 'Sequence Change', 'amino_acids': 'Amino Acids'}, 
 #                       inplace=True,  errors='ignore')
     
     return protein_df

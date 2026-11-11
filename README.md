@@ -134,7 +134,7 @@ Create new a python file for your use.
 2. Input variant table: Provides information on the given variant on a transcript level.
 
     ```
-    Gene Symbol	Transcript ID	Biotype	Exon Rank	Pfam Domain ID	Pfam Domain Name	Polyphen Prediction	Polyphen Score	Molecular Consequence	Codon Switch	Amino Acids	Associated Diseases	MONDO
+    Gene Symbol	Transcript ID	Biotype	Exon Rank	Pfam Domain ID	Pfam Domain Name	Polyphen Prediction	Polyphen Score	Molecular Consequence	Sequence Change	Amino Acids	Associated Diseases	MONDO
     ACVR1	ENST00000434821	protein_coding	6/11	PF08515	Transforming growth factor beta type I GS-motif	probably_damaging	0.999	missense_variant	cGc/cAc	R206H	fibrodysplasia ossificans progressiva MONDO:0007606
     ```
 
@@ -148,7 +148,7 @@ Create new a python file for your use.
 4. Output variant table: Provides information on the given orthologous variant on a transcript level.
 
     ```
-    Gene Symbol	AlleleID	AlleleSymbol	Transcript ID	Biotype	Exon Rank	Pfam Domain ID	Pfam Domain Name	Molecular Consequence	Codon Switch	Amino Acids	Associated Diseases	MONDO
+    Gene Symbol	AlleleID	AlleleSymbol	Transcript ID	Biotype	Exon Rank	Pfam Domain ID	Pfam Domain Name	Molecular Consequence	Sequence Change	Amino Acids	Associated Diseases	MONDO
     Acvr1	MGI:6140231	Acvr1tm1Glh	ENSMUST00000056376	protein_coding	6/11	PF08515	Transforming growth factor beta type I GS-motif	missense_variant	cGC/cAT	R206H	fibrodysplasia ossificans progressiva	MONDO:0007606
     Acvr1	MGI:6140231	Acvr1tm1Glh	ENSMUST00000090935	protein_coding	8/13	PF08515	Transforming growth factor beta type I GS-motif	missense_variant	cGC/cAT	R206H	fibrodysplasia ossificans progressiva	MONDO:0007606
     Acvr1	MGI:6140231	Acvr1tm1Glh	ENSMUST00000112599	protein_coding	5/10	PF08515	Transforming growth factor beta type I GS-motif	missense_variant	cGC/cAT	R206H	fibrodysplasia ossificans progressiva	MONDO:0007606

@@ -295,7 +295,7 @@ function renderTables(name, gene) {
     // Create HTML tables
     results.innerHTML = `
         <div class='tableWrapper'>
-            <h2>${queryOrganism} Variant</h2>
+            <h2>Submitted ${queryOrganism} Variant</h2>
             ${jsonToFieldList(queryProteins.map(variantFields), "queryVariantTable", queryVariantHidden)}
         </div>
 
@@ -308,7 +308,7 @@ function renderTables(name, gene) {
         ${org === 'human' ? coverage : ''}
 
         <div class='tableWrapper'>
-            <h2>${targetOrganism} Variants</h2>
+            <h2>${targetOrganism} Variants Evaluated</h2>
             ${jsonToHTMLTable(sortedOutputProteins.map(displayFields), "outputVariantTable")}
         </div>
 
@@ -463,9 +463,9 @@ function phenotypeSimilaritySection(name, gene, sortedScores) {
         return `<tr>
             <td><a href="https://www.informatics.jax.org/allele/${aid}" target="_blank" rel="noopener noreferrer">${symbol}</a><br><span class="alleleId">${aid}</span></td>
             <td>${escapeText(row['Matched Disease(s)'] || '')}</td>
+            <td>${row['MP Terms Mapped']} of ${row['MP Terms Total']}</td>
             <td class="scoreCell"><span class="scoreValue">${score(row['Phenotype Score (variant)'])}</span>${button(row, 'variant')}</td>
             <td class="scoreCell"><span class="scoreValue">${score(row['Phenotype Score (gene)'])}</span>${button(row, 'gene')}</td>
-            <td>${row['MP Terms Mapped']} of ${row['MP Terms Total']}</td>
         </tr>`;
     }).join('');
 
@@ -483,9 +483,9 @@ function phenotypeSimilaritySection(name, gene, sortedScores) {
                 <thead><tr>
                     <th>Mouse Allele</th>
                     <th>Matched Disease(s)</th>
+                    <th>MP Terms Mapped to HPO</th>
                     <th>Variant Phenotype Score</th>
                     <th>Gene Phenotype Score</th>
-                    <th>MP Terms Mapped to HPO</th>
                 </tr></thead>
                 <tbody>${body}</tbody>
             </table>
@@ -677,7 +677,7 @@ function renderUnevaluated(name) {
 
     results.innerHTML = `
         <div class='tableWrapper'>
-            <h2>${queryOrganism} Variant (not evaluated)</h2>
+            <h2>Submitted ${queryOrganism} Variant (not evaluated)</h2>
             <p class="coverageSummary">${rows[0]['Reason']}. No homologous variants or similarity scores are reported. ${org === 'mouse'
                 ? (hasAlleles ? 'The MGI allele(s) at this position are listed below.' : 'No MGI allele matches this position and allele.')
                 : 'ClinVar disease associations for this variant are listed below.'}</p>
@@ -840,7 +840,13 @@ function geneFields(row) {
             const start = Number(row['Start']).toLocaleString('en-US');
             const end = Number(row['End']).toLocaleString('en-US');
             out['Genome Location'] = `Chr ${value}:${start}-${end} (${row['Strand']})`;
-        } else if (!['Start', 'End', 'Strand', 'Accession'].includes(col)) {
+        } else if (col === 'Ensembl_ID') {
+            // Ensembl and NCBI Gene IDs share one line, e.g. "ENSG00000169057, Gene ID: 4204"
+            const ncbi = row['NCBI_Gene_ID'];
+            const ncbiRef = ncbi ? `Gene ID: <a href="https://www.ncbi.nlm.nih.gov/gene/${ncbi}" target="_blank" rel="noopener noreferrer">${ncbi}</a>` : '';
+            const ensemblRef = value ? `<a href="https://www.ensembl.org/id/${value}" target="_blank" rel="noopener noreferrer">${value}</a>` : '';
+            out['Cross References'] = [ensemblRef, ncbiRef].filter(Boolean).join(', ');
+        } else if (!['Start', 'End', 'Strand', 'Accession', 'NCBI_Gene_ID'].includes(col)) {
             out[col] = value;
         }
     });
@@ -875,7 +881,6 @@ const DISPLAY_NAMES = {
     'Exon Rank': 'Exon',
     'Intron Rank': 'Intron',
     'Amino Acids': 'Amino Acid Change',
-    'Associated Diseases': 'Associated Diseases (MONDO ID)'
 };
 
 // Variant row for display: columns renamed as in DISPLAY_NAMES, and each disease

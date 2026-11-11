@@ -290,7 +290,7 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
     # Rearrange columns
     mouse_prt_df = mouse_prt_df[['Submission', 'Gene Symbol', 'AlleleID', 'AlleleSymbol', 'Transcript ID', 'Biotype', 
                                  'Exon Rank', 'Intron Rank', 'Intron Offset', 'Pfam Domain ID', 'Molecular Consequence', 
-                                 'Codon Switch', 'Amino Acids', 'refAA', 'varAA', 'Associated Diseases', 'MONDO']]
+                                 'Sequence Change', 'Amino Acids', 'refAA', 'varAA', 'Associated Diseases', 'MONDO']]
 
 
     # Replace all null with None
