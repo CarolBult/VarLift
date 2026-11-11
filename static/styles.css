@@ -100,6 +100,19 @@ button:active {
     box-sizing: border-box;
 }
 
+/* Last row of the input box: download button on the left, User Guide link in the bottom-right corner */
+.submitFooter {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+}
+
+.guideLink {
+    color: #1c2a5a;
+    font-weight: 600;
+}
+
 .searchContainer textarea {
     width: 100%;
     box-sizing: border-box;

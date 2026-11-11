@@ -1,6 +1,8 @@
 # MGI VarLift
 The VarLift project is a tool providing a novel pipeline to identify equivalent genome sequence variants in protein-coding genes in mouse and human genomes for efficient mouse model discovery and development.
 
+**New to VarLift?** The [User Guide](docs/USER_GUIDE.md) explains how to submit variants, how to read the results, how variant equivalence and phenotype similarity are scored, and which data versions VarLift uses. It is also available in the running app under **User Guide** (`/help`).
+
 
 ## Abstract
 VarLift facilitates cross-species identification of equivalent single and multi-nucleotide genetic variants in protein coding sequences of orthologous genes. The tools is intended for two primary groups of users: (1) clinicians with human variant data of unknown phenotype or disease relevance who want to discover if there are equivalent variants in the laboratory mouse and what phenotype or disease annotations are associated with the mouse variants, and (2) researchers who have identified novel sequence variants in protein coding sequences of laboratory mice with abnormal phenotypes and want to determine if an equivalent variant exists in an orthologous human gene. VarLift integrates multiple authoritative resources into a unified pipeline, providing a reproducible framework for cross-species identification of equivalent sequence variants. Variant equivalence is measured by conservation of the variant’s molecular consequence, the position in the protein impacted by the sequence variant, the similarity of the amino acid change, the conservation of the protein domain in which the amino acid change occurs.

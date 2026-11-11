@@ -40,10 +40,16 @@ def sort_phenotypes_by_score(phenotype_df, score_df):
 app = FastAPI()
 
 app.mount('/static', StaticFiles(directory='static'), name='static')
+# User guide (docs/USER_GUIDE.md and its screenshots), shown at /help
+app.mount('/guide', StaticFiles(directory='docs'), name='guide')
 
 @app.get('/')
 def serve_dashboard():
     return FileResponse('templates/dashboard.html')
+
+@app.get('/help')
+def serve_help():
+    return FileResponse('templates/help.html')
 
 class VariantInput(BaseModel):
     variants: str
