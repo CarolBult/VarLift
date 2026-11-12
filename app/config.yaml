@@ -20,6 +20,8 @@ data:
   mgi_disease: "https://www.informatics.jax.org/downloads/reports/MGI_DiseaseMouseModel.rpt"
   mgi_phenotype: "https://www.informatics.jax.org/downloads/reports/ALL_Phenotype.rpt"
   mgi_genotype_phenotype: "https://www.informatics.jax.org/downloads/reports/MGI_PhenoGenoMP.rpt"
+  mgi_markers: "https://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
+  mgi_phenotypic_alleles: "https://www.informatics.jax.org/downloads/reports/MGI_PhenotypicAllele.rpt"
 
   clinvar_vcf: "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz"
   clinvar_tbi: "https://ftp.ncbi.nlm.nih.gov/pub/clinvar/vcf_GRCh38/clinvar.vcf.gz.tbi"
@@ -52,6 +54,8 @@ paths:
   mgi_disease: "app/data/MGI/MGI_DiseaseMouseModel.rpt"
   mgi_phenotype: "app/data/MGI/ALL_Phenotype.rpt"
   mgi_genotype_phenotype: "app/data/MGI/MGI_PhenoGenoMP.rpt"
+  mgi_markers: "app/data/MGI/MRK_List2.rpt"
+  mgi_phenotypic_alleles: "app/data/MGI/MGI_PhenotypicAllele.rpt"
 
   mondo_obo: "app/data/MONDO/mondo.obo"
   mondo_xref_map: "app/data/MONDO/mondo_xref_map.json"

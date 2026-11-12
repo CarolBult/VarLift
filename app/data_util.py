@@ -133,14 +133,22 @@ def parse_ensembl_exons(gff3_path, species):
         species. str. 'human' or 'mouse'.
     '''
     cols = ['seqid','source','type','start','end','score','strand','phase','attributes']
-    exon_df = pd.read_csv(gff3_path, sep='\t', comment='#', compression='gzip', header=None, names=cols,
-                          usecols=['type', 'start', 'end', 'strand', 'attributes'], low_memory=False)
-    exon_df = exon_df[exon_df['type'] == 'exon']
+    gff_df = pd.read_csv(gff3_path, sep='\t', comment='#', compression='gzip', header=None, names=cols,
+                         usecols=['seqid', 'type', 'start', 'end', 'strand', 'attributes'], low_memory=False,
+                         dtype={'seqid': str})
+
+    # Transcript -> gene, so a gene's exons can be found (e.g. whether a variant lies in an exon of an overlapping gene)
+    transcript_rows = gff_df.loc[gff_df['attributes'].str.startswith('ID=transcript:', na=False), 'attributes']
+    transcripts = transcript_rows.str.extract(r'^ID=transcript:([^;]+);Parent=gene:([^;]+)').dropna()
+    transcript_gene = dict(zip(transcripts[0], transcripts[1]))
+
+    exon_df = gff_df[gff_df['type'] == 'exon'].copy()
 
     exon_df['transcript_id'] = exon_df['attributes'].str.extract(r'Parent=transcript:([^;]+)', expand=False)
     exon_df['rank'] = exon_df['attributes'].str.extract(r'rank=(\d+)', expand=False).astype(int)
+    exon_df['gene_id'] = exon_df['transcript_id'].map(transcript_gene)
 
-    exon_df = exon_df[['transcript_id', 'rank', 'start', 'end', 'strand']].dropna(subset=['transcript_id'])
+    exon_df = exon_df[['transcript_id', 'rank', 'start', 'end', 'strand', 'seqid', 'gene_id']].dropna(subset=['transcript_id'])
 
     exon_df.to_parquet(config['paths'][f'{species}_exon_pqt'], index=False)
 

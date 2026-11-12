@@ -28,6 +28,10 @@ def refresh_mgi():
     download_file(config['data']['mgi_phenotype'], config['paths']['mgi_phenotype'])
     # Genotype-level abnormal phenotypes: tells ALL_Phenotype's normal (NOT) annotations apart
     download_file(config['data']['mgi_genotype_phenotype'], config['paths']['mgi_genotype_phenotype'])
+    # Marker coordinates and types, and every MGI allele with its marker: lets coverage list the alleles
+    # of gene clusters (e.g. Pcdhg) and overlapping genes, which VARIANT-ALLELE-MGI leaves out
+    download_file(config['data']['mgi_markers'], config['paths']['mgi_markers'])
+    download_file(config['data']['mgi_phenotypic_alleles'], config['paths']['mgi_phenotypic_alleles'])
     # Mammalian Phenotype ontology: which MP terms are top-level system headers (not scored)
     download_file(config['data']['mp_obo'], config['paths']['mp_obo'])
 

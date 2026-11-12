@@ -547,12 +547,14 @@ def mvar_query(variants, assembly='GRCm39'):
     from app.mouse_coverage import mgi_alleles_at, query_allele_coverage
     alleles = mgi_alleles_at(variants)
     submitted_ids = set(alleles['AlleleID'])
+    # Submitted positions, for the clusters and overlapping genes listed in the coverage table
+    positions = list(zip(variants['Chromosome'].astype(str), variants['Start'].astype(int)))
     unevaluated_genes = set(unevaluated_df.get('Gene Symbol', pd.Series(dtype=object)).dropna())
 
     if vep_df.empty:
         if unevaluated_df.empty:
             raise NoCodingVariantsError('No protein-coding consequences found on GRCm39.')
-        allele_coverage_df = query_allele_coverage(sorted(unevaluated_genes), submitted_ids)
+        allele_coverage_df = query_allele_coverage(sorted(unevaluated_genes), submitted_ids, positions)
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), unevaluated_df, allele_coverage_df
 
     # Assign input field
@@ -607,7 +609,7 @@ def mvar_query(variants, assembly='GRCm39'):
 
     # Every MGI allele of the queried genes, flagging the submitted ones
     genes = sorted(set(protein_df['Gene Symbol'].dropna()) | unevaluated_genes)
-    allele_coverage_df = query_allele_coverage(genes, submitted_ids)
+    allele_coverage_df = query_allele_coverage(genes, submitted_ids, positions)
 
     return gene_df, protein_df, input_gene_df, unevaluated_df, allele_coverage_df
 

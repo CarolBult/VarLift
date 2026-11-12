@@ -611,9 +611,22 @@ function coverageSection(alleleCoverage, gene, org) {
     } else {
         const submitted = alleleCoverage.filter(r => r.Evaluated).map(r => r.AlleleSymbol);
         const withDisease = alleleCoverage.filter(r => r.Diseases && r.Diseases.length > 0).length;
-        summary = `MGI has <strong>${total}</strong> ${gene} ${total === 1 ? 'allele' : 'alleles'} (${withDisease} with a disease association). ${submitted.length > 0
+        // Alleles of the gene's cluster (e.g. Pcdhg) and of overlapping genes are listed too
+        const own = alleleCoverage.filter(r => !r.Marker || r.Marker === gene).length;
+        const otherMarkers = [...new Set(alleleCoverage.filter(r => r.Marker && r.Marker !== gene).map(r => r.Marker))];
+        const noCoordinates = alleleCoverage.filter(r => !r.Consequence).length;
+        const plural = n => n === 1 ? 'allele' : 'alleles';
+        const perMarker = otherMarkers.map(m => `${m} (${alleleCoverage.filter(r => r.Marker === m).length})`);
+        const counts = otherMarkers.length === 0
+            ? `MGI has <strong>${total}</strong> ${gene} ${plural(total)} (${withDisease} with a disease association).`
+            : `MGI has ${own === 0 ? 'no' : `<strong>${own}</strong>`} ${gene} ${plural(own)}, and <strong>${total - own}</strong> ${plural(total - own)} of other markers at this position: ${perMarker.join(', ')}. ${withDisease === 0 ? 'None has' : `${withDisease} of the ${total} ${withDisease === 1 ? 'has' : 'have'}`} a disease association.`;
+        const coordinates = noCoordinates === 0 ? ''
+            : noCoordinates === total
+                ? ` ${total === 1 ? 'It has' : 'None of them have'} variant coordinates in MGI (e.g. large deletions or knockouts).`
+                : ` ${noCoordinates} of them have no variant coordinates in MGI (e.g. large deletions or knockouts).`;
+        summary = `${counts} ${submitted.length > 0
             ? `The submitted variant corresponds to ${submitted.join(', ')}.`
-            : 'The submitted variant does not match any of them.'}`;
+            : `The submitted variant's coordinates do not match any of them.${coordinates}`}`;
     }
 
     return `
@@ -632,11 +645,19 @@ function initCoverageTable(phenotypesByAllele) {
 
     const headers = table.find('thead th').map((i, th) => $(th).text().trim()).get();
 
+    // Marker matters only when alleles of a cluster or overlapping gene are listed with the gene's own
+    const markerCol = headers.indexOf('Marker');
+    const showMarker = markerCol !== -1 &&
+        [...phenotypesByAllele.values()].some(row => row['Marker'] && row['Marker'] !== row['Gene Symbol']);
+
     const alleleCoverageTable = table.DataTable({
         ordering: true,
-        order: [[headers.indexOf('Evaluated'), 'desc'], [headers.indexOf('AlleleSymbol'), 'asc']],
+        order: [[headers.indexOf('Evaluated'), 'desc'],
+                ...(showMarker ? [[markerCol, 'asc']] : []),
+                [headers.indexOf('AlleleSymbol'), 'asc']],
         columnDefs: [{ targets: headers.indexOf('Phenotypes'), orderable: false }]
     });
+    if (markerCol !== -1 && !showMarker) alleleCoverageTable.column(markerCol).visible(false);
 
     // Hide Gene Symbol (same for all rows of a single-gene variant query), and
     // AlleleID, which is shown beneath the allele symbol
