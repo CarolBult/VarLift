@@ -1047,6 +1047,8 @@ function initCoverageTable(phenotypesByAllele) {
     // AlleleID, which is shown beneath the allele symbol
     alleleCoverageTable.column(headers.indexOf('Gene Symbol')).visible(false);
     alleleCoverageTable.column(headers.indexOf('AlleleID')).visible(false);
+    // Reason opens from the Evaluated cell of alleles that weren't evaluated
+    if (headers.includes('Reason')) alleleCoverageTable.column(headers.indexOf('Reason')).visible(false);
     // Normal findings open with the abnormal ones in the Phenotypes dropdown
     if (headers.includes('Normal Phenotypes')) alleleCoverageTable.column(headers.indexOf('Normal Phenotypes')).visible(false);
 
@@ -1389,9 +1391,11 @@ function formatCell(row, col, tableId, org) {
             .join(', ');
     }
 
-    // The reason is a long sentence; a wider cell keeps the rows short
-    if (col === 'Reason' && tableId === 'alleleCoverageTable' && value) {
-        value = `<span class="reasonText">${value}</span>`;
+    // An allele that wasn't evaluated says why in a dropdown under "false"
+    // (the Reason column itself is hidden)
+    if (col === 'Evaluated' && tableId === 'alleleCoverageTable' && value === false && row['Reason']) {
+        value = `<details class="termDropdown reasonDropdown"><summary>false</summary>`
+            + `<div class="reasonText">${row['Reason']}</div></details>`;
     }
 
     // Coverage rows stack the linked allele ID beneath the allele symbol, to save a column

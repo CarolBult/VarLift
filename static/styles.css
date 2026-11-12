@@ -527,10 +527,11 @@ table.fieldTable td {
     font-size: 12px;
 }
 
-/* Not-evaluated reason in the coverage table, wide enough to wrap onto two or three lines */
-.reasonText {
-    display: inline-block;
-    min-width: 24em;
+/* Not-evaluated reason, opened under "false" in the coverage table's Evaluated column */
+.reasonDropdown .reasonText {
+    width: 18em;
+    margin-top: 6px;
+    white-space: normal;
 }
 
 /* PHENOTYPE DROPDOWNS */
