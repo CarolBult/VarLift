@@ -1,5 +1,5 @@
 import yaml
-from data_util import download_file, parse_mondo_obo, parse_ensembl_gff3, parse_ensembl_exons, parse_ensembl_peptides, parse_ncbi_variant_summary
+from data_util import download_file, parse_mondo_obo, parse_ensembl_gff3, parse_ensembl_exons, parse_ensembl_peptides, parse_ensembl_cds, parse_ensembl_domains, parse_ncbi_variant_summary
 
 
 # Load Config
@@ -95,6 +95,24 @@ def refresh_ensembl():
 
     parse_ensembl_peptides(pep_hum, 'human')
     parse_ensembl_peptides(pep_mus, 'mouse')
+
+    # Coding sequences: shown codon by codon in the transcript alignment view
+    cds_hum = config['paths']['ensembl_hum_cds'].format(ensemble_version=version)
+    cds_mus = config['paths']['ensembl_mus_cds'].format(ensemble_version=version)
+    download_file(config['data']['ensembl_hum_cds'].format(ensemble_version=version), cds_hum)
+    download_file(config['data']['ensembl_mus_cds'].format(ensemble_version=version), cds_mus)
+
+    parse_ensembl_cds(cds_hum, 'human')
+    parse_ensembl_cds(cds_mus, 'mouse')
+
+    # Pfam domain positions, from the core database's protein_feature table: drawn on the alignment views
+    download_file(config['data']['pfam_clans'], config['paths']['pfam_clans'])
+    for short, species in [('hum', 'human'), ('mus', 'mouse')]:
+        core_dir = config['paths'][f'ensembl_{short}_core_dir'].format(ensemble_version=version)
+        for table in ['analysis', 'translation', 'transcript', 'protein_feature']:
+            url = config['data'][f'ensembl_{short}_core_table'].format(ensemble_version=version, table=table)
+            download_file(url, f'{core_dir}/{table}.txt.gz')
+        parse_ensembl_domains(core_dir, species)
 
 
 def refresh_ncbi():

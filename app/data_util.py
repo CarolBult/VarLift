@@ -153,6 +153,24 @@ def parse_ensembl_exons(gff3_path, species):
     exon_df.to_parquet(config['paths'][f'{species}_exon_pqt'], index=False)
 
 
+def _read_ensembl_fasta(fasta_path, id_pattern):
+    '''(transcript ID, sequence) for each record of a gzipped Ensembl FASTA, the ID taken from the header by id_pattern.'''
+    rows = []
+    transcript, sequence = None, []
+    with gzip.open(fasta_path, 'rt') as f:
+        for line in f:
+            if line.startswith('>'):
+                if transcript:
+                    rows.append((transcript, ''.join(sequence)))
+                match = re.search(id_pattern, line)
+                transcript, sequence = (match.group(1) if match else None), []
+            else:
+                sequence.append(line.strip())
+        if transcript:
+            rows.append((transcript, ''.join(sequence)))
+    return pd.DataFrame(rows, columns=['transcript_id', 'sequence']).drop_duplicates('transcript_id')
+
+
 def parse_ensembl_peptides(pep_path, species):
     '''
     Parses an Ensembl peptide FASTA to extract each transcript's protein sequence and
@@ -163,22 +181,72 @@ def parse_ensembl_peptides(pep_path, species):
         pep_path. str. Path to gzipped pep.all FASTA file.
         species. str. 'human' or 'mouse'.
     '''
-    rows = []
-    transcript, sequence = None, []
-    with gzip.open(pep_path, 'rt') as f:
-        for line in f:
-            if line.startswith('>'):
-                if transcript:
-                    rows.append((transcript, ''.join(sequence)))
-                match = re.search(r'transcript:(\S+?)(?:\.\d+)?(?:\s|$)', line)
-                transcript, sequence = (match.group(1) if match else None), []
-            else:
-                sequence.append(line.strip())
-        if transcript:
-            rows.append((transcript, ''.join(sequence)))
-
-    protein_df = pd.DataFrame(rows, columns=['transcript_id', 'sequence']).drop_duplicates('transcript_id')
+    protein_df = _read_ensembl_fasta(pep_path, r'transcript:(\S+?)(?:\.\d+)?(?:\s|$)')
     protein_df.to_parquet(config['paths'][f'{species}_protein_pqt'], index=False)
+
+
+def parse_ensembl_cds(cds_path, species):
+    '''
+    Parses an Ensembl CDS FASTA (headers start with the versioned transcript ID) to
+    extract each transcript's coding sequence and saves it as a parquet file. Used to
+    show the codons beneath a protein alignment.
+
+    Parameters:
+        cds_path. str. Path to gzipped cds.all FASTA file.
+        species. str. 'human' or 'mouse'.
+    '''
+    cds_df = _read_ensembl_fasta(cds_path, r'^>(\S+?)(?:\.\d+)?(?:\s|$)')
+    cds_df.to_parquet(config['paths'][f'{species}_cds_pqt'], index=False)
+
+
+def parse_ensembl_domains(mysql_dir, species):
+    '''
+    Parses the Pfam protein features of an Ensembl core database dump (the
+    analysis, translation, transcript and protein_feature tables) into each
+    transcript's Pfam domains with their residue ranges, saved as a parquet file.
+    Used to draw domains on the transcript alignment views.
+
+    Parameters:
+        mysql_dir. str. Directory holding the four gzipped table dumps.
+        species. str. 'human' or 'mouse'.
+    '''
+    def table(name, columns, usecols):
+        return pd.read_csv(Path(mysql_dir) / f'{name}.txt.gz', sep='\t', header=None, names=columns,
+                           usecols=usecols, quoting=3, na_values='\\N', keep_default_na=False, low_memory=False)
+
+    analysis = table('analysis', ['analysis_id', 'created', 'logic_name', 'db', 'db_version', 'db_file', 'program',
+                                  'program_version', 'program_file', 'parameters', 'module', 'module_version',
+                                  'gff_source', 'gff_feature'], ['analysis_id', 'logic_name'])
+    pfam_ids = set(analysis.loc[analysis['logic_name'].str.lower() == 'pfam', 'analysis_id'])
+
+    features = table('protein_feature', ['protein_feature_id', 'translation_id', 'seq_start', 'seq_end', 'hit_start',
+                                         'hit_end', 'hit_name', 'analysis_id', 'score', 'evalue', 'perc_ident',
+                                         'external_data', 'hit_description', 'cigar_line', 'align_type'],
+                     ['translation_id', 'seq_start', 'seq_end', 'hit_name', 'analysis_id', 'hit_description'])
+    features = features[features['analysis_id'].isin(pfam_ids)]
+
+    translations = table('translation', ['translation_id', 'transcript_id', 'seq_start', 'start_exon_id', 'seq_end',
+                                         'end_exon_id', 'stable_id', 'version', 'created_date', 'modified_date'],
+                         ['translation_id', 'transcript_id'])
+    transcripts = table('transcript', ['transcript_id', 'gene_id', 'analysis_id', 'seq_region_id', 'seq_region_start',
+                                       'seq_region_end', 'seq_region_strand', 'display_xref_id', 'source', 'biotype',
+                                       'description', 'is_current', 'canonical_translation_id', 'stable_id', 'version',
+                                       'created_date', 'modified_date'], ['transcript_id', 'stable_id'])
+
+    domains = (features.merge(translations, on='translation_id')
+                       .merge(transcripts.rename(columns={'transcript_id': 'tid', 'stable_id': 'transcript_id'}),
+                              left_on='transcript_id', right_on='tid', suffixes=('_internal', '')))
+    domains = domains.rename(columns={'hit_name': 'domain_id', 'seq_start': 'start', 'seq_end': 'end'})
+
+    # Pfam's descriptive family names (Ensembl stores the short IDs, e.g. PK_Tyr_Ser-Thr) and clans,
+    # which group related families such as the two protein kinase models PF00069 and PF07714
+    clans = pd.read_csv(config['paths']['pfam_clans'], sep='\t', header=None, compression='gzip', quoting=3,
+                        names=['domain_id', 'clan', 'clan_name', 'short_name', 'description'])
+    domains = domains.merge(clans[['domain_id', 'clan', 'description']], on='domain_id', how='left')
+    domains['name'] = domains['description'].fillna(domains['hit_description'])
+    domains = (domains[['transcript_id', 'domain_id', 'name', 'clan', 'start', 'end']]
+               .drop_duplicates().sort_values(['transcript_id', 'start']))
+    domains.to_parquet(config['paths'][f'{species}_domain_pqt'], index=False)
 
 
 def parse_ncbi_variant_summary(summary_path, output_path):

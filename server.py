@@ -8,6 +8,8 @@ import logging
 
 from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score, NoCodingVariantsError, phenotype_similarity
 from app.processing_util import process_batch_query
+from app.transcript_alignment import transcript_alignment, transcript_overview
+from app.protein_alignment import SequenceUnavailable
 
 ORGANISM_LABELS = {'human': 'Human (GRCh38)', 'mouse': 'Mouse (GRCm39)'}
 
@@ -50,6 +52,46 @@ def serve_dashboard():
 @app.get('/help')
 def serve_help():
     return FileResponse('templates/help.html')
+
+@app.get('/alignment')
+def alignment(query_tx: str, query_species: str, target_tx: str, target_species: str,
+              query_residue: int | None = None, target_residue: int | None = None, flank: int | None = None):
+    '''
+    Codon-aware alignment of a query transcript and a homologous transcript, for the
+    Align view of the Variants Evaluated table. flank limits the columns returned to
+    that many residues either side of query_residue; omit it for the whole alignment.
+    '''
+    try:
+        return transcript_alignment(query_tx, query_species, target_tx, target_species,
+                                    query_residue, target_residue, flank)
+    except SequenceUnavailable:
+        return JSONResponse(status_code=404, content={
+            'error': f'No protein sequence is available for {query_tx} or {target_tx}.'})
+    except Exception:
+        logging.exception('Alignment failed')
+        return JSONResponse(status_code=500, content={'error': 'The alignment could not be made.'})
+
+class OverviewInput(BaseModel):
+    query_tx: str
+    query_species: str
+    query_residue: int | None = None
+    target_species: str
+    targets: list[tuple[str, int | None]]
+
+@app.post('/transcript_overview')
+def overview(data: OverviewInput):
+    '''
+    All of an allele's transcripts aligned to the query transcript, for the transcript
+    overview opened from the Aligned Position column of the scoring table.
+    '''
+    try:
+        return transcript_overview(data.query_tx, data.query_species, data.query_residue,
+                                   data.targets, data.target_species)
+    except SequenceUnavailable:
+        return JSONResponse(status_code=404, content={'error': f'No protein sequence is available for {data.query_tx}.'})
+    except Exception:
+        logging.exception('Transcript overview failed')
+        return JSONResponse(status_code=500, content={'error': 'The transcripts could not be aligned.'})
 
 class VariantInput(BaseModel):
     variants: str

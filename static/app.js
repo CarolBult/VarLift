@@ -309,7 +309,7 @@ function renderTables(name, gene) {
 
         <div class='tableWrapper'>
             <h2>${targetOrganism} Variants Evaluated</h2>
-            ${jsonToHTMLTable(sortedOutputProteins.map(displayFields), "outputVariantTable")}
+            ${jsonToHTMLTable(sortedOutputProteins.map(row => withAlignButton(displayFields(row), row, org)), "outputVariantTable")}
         </div>
 
         <div class='tableWrapper'>
@@ -372,6 +372,9 @@ function renderTables(name, gene) {
     if (targetOrganism === 'Human') {hideColumnsByName(outputVariantTable, outputHumanHidden);}
 
     if (targetOrganism === 'Mouse') {hideColumnsByName(outputVariantTable, outputMouseHidden);}
+
+    // Align buttons open the transcript alignment beneath the row
+    initAlignmentToggles(outputVariantTable, org, queryProteins, scores);
     
 
     // CREATE SCORE DATATABLE ELEMENT
@@ -390,7 +393,13 @@ function renderTables(name, gene) {
         .filter(col => col.endsWith('Match') && sortedScores.every(row => row[col] === null));
 
     // Hide columns
-    hideColumnsByName(scoreTable, [...scoreHiddenCols, ...notApplicable]);
+    // The query transcript matters only when the variant falls in several of them
+    const queryTranscripts = new Set(sortedScores.map(row => row['Query Transcript ID']));
+    const singleQueryTranscript = queryTranscripts.size <= 1 ? ['Query Transcript ID'] : [];
+    hideColumnsByName(scoreTable, [...scoreHiddenCols, ...notApplicable, ...singleQueryTranscript]);
+
+    // Aligned Position buttons open the transcript overview beneath the row
+    initTranscriptOverview(scoreTable, org, queryProteins, sortedOutputProteins, sortedScores);
 
 
     // CREATE PHENOTYPE DATATABLE ELEMENT
@@ -428,6 +437,381 @@ function initPhenotypeToggles(tableId, dataTable, phenotypesByAllele) {
             this.setAttribute('aria-expanded', 'true');
         }
     });
+}
+
+
+// PROTEIN DOMAINS on the alignment views: one colour per Pfam domain, shared by both views
+const DOMAIN_COLORS = ['#2b9a9a', '#c9a227', '#c2577a', '#3fa7d6', '#8d6e63', '#7a8b2e'];
+
+function domainColors(domainLists) {
+    const colors = new Map();
+    domainLists.flat().forEach(d => {
+        if (!colors.has(d.id)) colors.set(d.id, DOMAIN_COLORS[colors.size % DOMAIN_COLORS.length]);
+    });
+    return colors;
+}
+
+function domainLegend(domainLists, colors) {
+    const names = new Map();
+    domainLists.flat().forEach(d => { if (!names.has(d.id)) names.set(d.id, d.name); });
+    if (names.size === 0) return '<p class="alignNote">No Pfam domains are annotated on these proteins.</p>';
+    return `<p class="domainLegend">${[...names].map(([id, name]) =>
+        `<span class="domainKey"><span class="domainSwatch" style="background:${colors.get(id)}"></span>`
+        + `<a href="https://www.ebi.ac.uk/interpro/entry/pfam/${escapeText(id)}" target="_blank" rel="noopener noreferrer">${escapeText(id)}</a><span>${escapeText(name || '')}</span></span>`).join('')}</p>`;
+}
+
+// Domains split into lanes so overlapping ones (e.g. two kinase-domain models) sit one above the other
+function domainLanes(domains) {
+    const lanes = [];
+    [...domains].sort((a, b) => a.start - b.start).forEach(d => {
+        const lane = lanes.find(l => l[l.length - 1].end < d.start);
+        if (lane) lane.push(d); else lanes.push([d]);
+    });
+    return lanes;
+}
+
+
+// TRANSCRIPT ALIGNMENT
+// Each Variants Evaluated row has an Align button that opens, beneath the row, a
+// codon-aware alignment of the query transcript and the row's transcript, centred on the
+// variant. The server aligns the proteins as the scoring does and lines the codons up under them.
+
+const ALIGN_FLANK = 30;       // residues either side of the variant shown at first
+const ALIGN_BLOCK = 20;       // alignment columns per printed line
+
+function residueOf(aminoAcids) {
+    const match = /^[A-Z*-]+(\d+)/.exec(aminoAcids || '');
+    return match ? Number(match[1]) : null;
+}
+
+// Variant row for display with an Align button after its Transcript ID
+function withAlignButton(displayed, row, org) {
+    const key = org === 'human' ? row['AlleleID'] : row['Name'];
+    const button = `<button type="button" class="alignToggle" aria-expanded="false"
+        data-key="${escapeText(String(key ?? ''))}" data-tx="${escapeText(row['Transcript ID'] || '')}"
+        data-residue="${residueOf(row['Amino Acids']) ?? ''}">Align</button>`;
+    const out = {};
+    Object.entries(displayed).forEach(([col, value]) => {
+        out[col] = value;
+        if (col === 'Transcript ID') out['Alignment'] = button;
+    });
+    if (!('Alignment' in out)) out['Alignment'] = button;
+    return out;
+}
+
+function initAlignmentToggles(dataTable, org, queryProteins, scores) {
+    const querySpecies = org;
+    const targetSpecies = org === 'human' ? 'mouse' : 'human';
+    const keyCol = org === 'human' ? 'AlleleID' : 'Name';
+
+    $(dataTable.table().node()).find('tbody').on('click', 'button.alignToggle', function () {
+        const row = dataTable.row($(this).closest('tr'));
+        if (row.child.isShown()) {
+            row.child.hide();
+            this.setAttribute('aria-expanded', 'false');
+            return;
+        }
+        this.setAttribute('aria-expanded', 'true');
+
+        // Query transcripts this row was scored against, best score first
+        const { key, tx, residue } = this.dataset;
+        const pairs = scores
+            .filter(s => String(s[keyCol]) === key && s['Transcript ID'] === tx && s['Query Transcript ID'])
+            .sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
+        const queryTxs = [...new Set(pairs.map(s => s['Query Transcript ID']))];
+        if (queryTxs.length === 0) {
+            row.child('<div class="alignmentView"><p class="alignNote">No scored query transcript to align with.</p></div>').show();
+            return;
+        }
+
+        const picker = queryTxs.length > 1
+            ? `<label class="alignPicker">Query transcript <select>${queryTxs.map(q => `<option>${escapeText(q)}</option>`).join('')}</select></label>`
+            : '';
+        row.child(`<div class="alignmentView">${picker}<div class="alignBody"><p class="alignNote">Aligning…</p></div></div>`).show();
+        const view = $(row.child()).find('.alignmentView');
+
+        const load = (queryTx, full) => {
+            const queryRow = queryProteins.find(r => r['Transcript ID'] === queryTx);
+            const params = new URLSearchParams({
+                query_tx: queryTx, query_species: querySpecies, target_tx: tx, target_species: targetSpecies,
+            });
+            const queryResidue = queryRow ? residueOf(queryRow['Amino Acids']) : null;
+            if (queryResidue) params.set('query_residue', queryResidue);
+            if (residue) params.set('target_residue', residue);
+            if (!full && queryResidue) params.set('flank', ALIGN_FLANK);
+
+            view.find('.alignBody').html('<p class="alignNote">Aligning…</p>');
+            fetch(`/alignment?${params}`)
+                .then(response => response.json().then(body => ({ ok: response.ok, body })))
+                .then(({ ok, body }) => {
+                    if (!ok) throw new Error(body.error || 'The alignment could not be made.');
+                    view.find('.alignBody').html(alignmentView(body, queryRow));
+                    view.find('button.alignFull').on('click', () => load(queryTx, true));
+                    view.find('button.alignWindow').on('click', () => load(queryTx, false));
+                })
+                .catch(error => view.find('.alignBody').html(`<p class="alignNote">${escapeText(error.message)}</p>`));
+        };
+
+        view.find('select').on('change', function () { load(this.value, false); });
+        load(queryTxs[0], false);
+    });
+}
+
+const SPECIES_LABEL = { human: 'Human', mouse: 'Mouse' };
+
+// Summary, gap list and the printed alignment
+function alignmentView(data, queryRow) {
+    const q = SPECIES_LABEL[data.query.species], t = SPECIES_LABEL[data.target.species];
+    const st = data.stats;
+    const cols = data.columns;
+
+    const variantCol = cols.find(c => c.qp === data.query.residue);
+    let lead = '';
+    if (variantCol) {
+        const aligned = variantCol.t === '-'
+            ? `falls in a gap in the ${t.toLowerCase()} protein`
+            : `aligns to ${t.toLowerCase()} ${variantCol.t}${variantCol.tp}`;
+        const codons = variantCol.qc && variantCol.tc ? ` (codons ${variantCol.qc} and ${variantCol.tc})` : '';
+        lead = `${q} ${variantCol.q}${variantCol.qp} ${aligned}${codons}. `;
+        if (data.target.residue && variantCol.tp !== data.target.residue) {
+            lead += `The ${t.toLowerCase()} variant is at residue ${data.target.residue}, which does not align to it. `;
+        }
+    }
+    const change = queryRow && queryRow['Sequence Change'] ? ` The submitted change is ${escapeText(queryRow['Sequence Change'])}.` : '';
+
+    const identity = `Proteins ${data.query.length} and ${data.target.length} residues long; `
+        + `${st.protein_identity}% identical over ${st.aligned_residues} aligned residues`
+        + (st.cds_identity !== null ? `, coding sequences ${st.cds_identity}% identical` : '')
+        + (st.gap_columns ? `; ${st.gap_columns} gap ${st.gap_columns === 1 ? 'column' : 'columns'}.` : '; no gaps.');
+
+    const gaps = data.gaps.map(g => {
+        const lacking = g.missing_in === 'target' ? t : q;
+        const having = g.missing_in === 'target' ? q : t;
+        const range = g.from === g.to ? `residue ${g.from}` : `residues ${g.from}–${g.to}`;
+        return `<li>${lacking} lacks ${g.length} ${g.length === 1 ? 'residue' : 'residues'} (${having.toLowerCase()} ${range})</li>`;
+    });
+
+    const notes = [];
+    if (!data.query.codons || !data.target.codons) notes.push('Codons are not shown where a coding sequence is unavailable or does not match its protein.');
+    if (data.windowed) notes.push('These proteins are long, so only the region around the variant was aligned.');
+
+    const colors = domainColors([data.query.domains || [], data.target.domains || []]);
+
+    const toggle = data.windowed ? ''
+        : data.complete
+            ? (data.query.residue ? '<button type="button" class="alignWindow">Show the region around the variant</button>' : '')
+            : '<button type="button" class="alignFull">Show the full alignment</button>';
+
+    return `
+        <p class="alignSummary">${escapeText(data.query.transcript)} (${q}) vs ${escapeText(data.target.transcript)} (${t}). ${lead}${change}</p>
+        <p class="alignStats">${identity}</p>
+        ${gaps.length ? `<ul class="alignGaps">${gaps.join('')}</ul>` : ''}
+        ${notes.map(n => `<p class="alignNote">${n}</p>`).join('')}
+        ${domainLegend([data.query.domains || [], data.target.domains || []], colors)}
+        <div class="alignScroll"><pre class="alignText">${alignmentText(cols, data, q, t, colors)}</pre></div>
+        <p class="alignKey"><span class="alnVariant">Highlighted</span>: variant residue. <span class="alnDiff">Bold red</span>: base differs.
+           | identical residue, . different residue.</p>
+        ${toggle}`;
+}
+
+// Printed alignment, ALIGN_BLOCK columns per line group: query codons, query residues,
+// match line, target residues, target codons
+function alignmentText(cols, data, q, t, colors) {
+    const showQ = data.query.codons, showT = data.target.codons;
+    const width = Math.max(q.length, t.length) + 7;
+    const label = (text) => text.padEnd(width);
+    const codon = (mine, other) => !mine
+        ? '---'
+        : [...mine].map((base, i) => other && other[i] !== base ? `<b class="alnDiff">${base}</b>` : base).join('');
+    const mark = (c, text) => {
+        if (c.qp && c.qp === data.query.residue) return `<span class="alnVariant">${text}</span>`;
+        if (c.tp && c.tp === data.target.residue) return `<span class="alnVariant alnTarget">${text}</span>`;
+        return text;
+    };
+    // A line of bars under (or over) a sequence where its residues are in a domain, labelled where each domain starts
+    const names = new Map([...(data.query.domains || []), ...(data.target.domains || [])].map(d => [d.id, d.name]));
+    const domainLine = (block, key) => {
+        if (!block.some(c => c[key])) return null;
+        let out = '';
+        for (let i = 0; i < block.length;) {
+            const id = block[i][key];
+            let j = i;
+            while (j < block.length && block[j][key] === id) j++;
+            const width = (j - i) * 4 - 1;
+            if (!id) {
+                out += ' '.repeat(width);
+            } else {
+                const name = `${id} ${names.get(id) || ''}`.trim();
+                const fits = [name, id].find(l => l.length + 1 <= width);
+                const text = (fits ? `${fits} ` : '').padEnd(width, '━').slice(0, width);
+                out += `<span class="alnDomain" style="color:${colors.get(id)}" title="${escapeText(name)}">${escapeText(text)}</span>`;
+            }
+            if (j < block.length) out += ' ';
+            i = j;
+        }
+        return out;
+    };
+
+    const first = (block, key) => block.find(c => c[key])?.[key] ?? '';
+    const last = (block, key) => [...block].reverse().find(c => c[key])?.[key] ?? '';
+
+    const groups = [];
+    for (let i = 0; i < cols.length; i += ALIGN_BLOCK) {
+        const block = cols.slice(i, i + ALIGN_BLOCK);
+        const lines = [];
+        const qDomains = domainLine(block, 'qd'), tDomains = domainLine(block, 'td');
+        if (qDomains) lines.push(label('') + qDomains);
+        if (showQ) lines.push(label('') + block.map(c => mark(c, codon(c.qc, c.tc))).join(' '));
+        lines.push(label(`${q} ${first(block, 'qp')}`) + block.map(c => mark(c, ` ${c.q} `)).join(' ') + `  ${last(block, 'qp')}`);
+        lines.push(label('') + block.map(c => c.q === '-' || c.t === '-' ? '   ' : c.q === c.t ? ' | ' : ' . ').join(' '));
+        lines.push(label(`${t} ${first(block, 'tp')}`) + block.map(c => mark(c, ` ${c.t} `)).join(' ') + `  ${last(block, 'tp')}`);
+        if (showT) lines.push(label('') + block.map(c => mark(c, codon(c.tc, c.qc))).join(' '));
+        if (tDomains) lines.push(label('') + tDomains);
+        groups.push(lines.join('\n'));
+    }
+    return groups.join('\n\n');
+}
+
+
+// TRANSCRIPT OVERVIEW
+// Every transcript scored for an allele (or, for mouse queries, a human variant), drawn
+// against the query transcript's residue numbering: solid bars where a transcript's
+// residues align to the query protein, a thin line where it lacks the query's residues,
+// ticks where it has residues the query lacks, and a mark at its own variant residue.
+
+function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, scores) {
+    const keyCol = org === 'human' ? 'AlleleID' : 'Name';
+
+    $(dataTable.table().node()).find('tbody').on('click', 'button.overviewToggle', function () {
+        const row = dataTable.row($(this).closest('tr'));
+        if (row.child.isShown()) {
+            row.child.hide();
+            this.setAttribute('aria-expanded', 'false');
+            return;
+        }
+        this.setAttribute('aria-expanded', 'true');
+        const { key, tx, qtx } = this.dataset;
+
+        // The human transcript is the reference and the mouse transcripts compared with it
+        // are drawn beneath: for a human query, the allele's transcripts; for a mouse query,
+        // the submitted variant's transcripts
+        const human = org === 'human'
+            ? { tx: qtx, variant: queryProteins.find(r => r['Transcript ID'] === qtx) }
+            : { tx: tx, variant: outputProteins.find(r => String(r[keyCol]) === key && r['Transcript ID'] === tx) };
+        const group = scores.filter(s => String(s[keyCol]) === key
+            && (org === 'human' ? s['Query Transcript ID'] === qtx : s['Transcript ID'] === tx));
+        const mouseTxCol = org === 'human' ? 'Transcript ID' : 'Query Transcript ID';
+        const seen = new Set();
+        const tracks = group.filter(s => !seen.has(s[mouseTxCol]) && seen.add(s[mouseTxCol])).map(s => {
+            const mouseTx = s[mouseTxCol];
+            const variant = org === 'human'
+                ? outputProteins.find(v => String(v[keyCol]) === key && v['Transcript ID'] === mouseTx)
+                : queryProteins.find(v => v['Transcript ID'] === mouseTx);
+            return { tx: mouseTx, aminoAcids: variant ? variant['Amino Acids'] : null, score: s };
+        });
+        const current = org === 'human' ? tx : qtx;
+        const humanChange = human.variant ? human.variant['Amino Acids'] : null;
+        const label = org === 'human' ? (group[0] && group[0]['Allele Symbol']) || key : 'the submitted mouse variant';
+
+        row.child('<div class="txOverview"><p class="alignNote">Aligning transcripts…</p></div>').show();
+        const view = $(row.child()).find('.txOverview');
+
+        fetch('/transcript_overview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query_tx: human.tx, query_species: 'human', query_residue: residueOf(humanChange),
+                target_species: 'mouse', targets: tracks.map(t => [t.tx, residueOf(t.aminoAcids)]),
+            }),
+        })
+            .then(response => response.json().then(body => ({ ok: response.ok, body })))
+            .then(({ ok, body }) => {
+                if (!ok) throw new Error(body.error || 'The transcripts could not be aligned.');
+                view.html(overviewView(body, tracks, humanChange, label, current));
+            })
+            .catch(error => view.html(`<p class="alignNote">${escapeText(error.message)}</p>`));
+    });
+}
+
+function axisStep(length) {
+    return length <= 200 ? 50 : length <= 600 ? 100 : length <= 1500 ? 250 : length <= 4000 ? 500 : 5000;
+}
+
+function overviewView(data, targets, qChange, alleleLabel, clickedTx) {
+    const q = SPECIES_LABEL[data.query.species], t = SPECIES_LABEL[data.target_species];
+    const L = data.query.length;
+    const pct = residue => `${(100 * (residue - 0.5) / L).toFixed(3)}%`;
+    const span = (from, to) => `left:${(100 * (from - 1) / L).toFixed(3)}%;width:${(100 * (to - from + 1) / L).toFixed(3)}%`;
+    const qResidue = data.query.residue;
+    const qLabel = qChange ? qChange.replace(/[A-Z*]+$/, '') : (qResidue ? `residue ${qResidue}` : '');
+    const guide = qResidue ? `<div class="ovGuide" style="left:${pct(qResidue)}"></div>` : '';
+
+    const ticks = [];
+    const step = axisStep(L);
+    // Leave out a tick that would crowd the end label
+    for (let r = step; r <= L - 0.3 * step; r += step) ticks.push(r);
+    const axis = `<div class="ovRow ovAxisRow"><div class="ovLabel"></div><div class="ovTrack ovAxis">
+        ${[1, ...ticks, L].map(r => `<span class="ovTick" style="left:${pct(r)}">${r}</span>`).join('')}</div></div>`;
+
+    const colors = domainColors([data.query.domains || [], ...data.targets.map(d => d.domain_segments || [])]);
+    const strips = segments => domainLanes(segments || []).map((lane, n) => lane.map(d =>
+        `<div class="ovDomain" style="${span(d.start, d.end)};top:${23 + 6 * n}px;background:${colors.get(d.id)}"
+            title="${escapeText(d.id)} ${escapeText(d.name || '')} (${q.toLowerCase()} residues ${d.start}–${d.end})"></div>`).join('')).join('');
+    const trackHeight = segments => `height:${26 + 6 * Math.max(1, domainLanes(segments || []).length)}px`;
+
+    const queryTrack = `<div class="ovRow ovQuery">
+        <div class="ovLabel"><strong>${q} ${escapeText(data.query.transcript)}</strong><span>${L} aa${qChange ? ` · ${escapeText(qChange)}` : ''}</span></div>
+        <div class="ovTrack" style="${trackHeight(data.query.domains)}">${guide}<div class="ovBlock" style="${span(1, L)}"></div>${strips(data.query.domains)}
+            ${qResidue ? `<div class="ovMark ovOn" style="left:${pct(qResidue)}"><span>${escapeText(qLabel)}</span></div>` : ''}</div></div>`;
+
+    const byTx = new Map(data.targets.map(d => [d.transcript, d]));
+    const rows = targets.map(({ tx, score, aminoAcids }) => {
+        const d = byTx.get(tx);
+        const txLabel = escapeText(tx);
+        const current = tx === clickedTx ? ' ovCurrent' : '';
+        if (!d || d.error) {
+            return `<div class="ovRow${current}"><div class="ovLabel"><strong>${txLabel}</strong><span>${escapeText(d?.error || 'Not aligned')}</span></div><div class="ovTrack"></div></div>`;
+        }
+        const first = d.blocks[0], last = d.blocks[d.blocks.length - 1];
+        const baseline = first ? `<div class="ovLine" style="${span(first[0], last[1])}"></div>` : '';
+        const blocks = d.blocks.map(b => `<div class="ovBlock" style="${span(b[0], b[1])}" title="${t} ${b[2]}–${b[3]} align to ${q.toLowerCase()} ${b[0]}–${b[1]}"></div>`).join('');
+        const inserts = d.insertions.map(i => `<div class="ovInsert" style="left:${pct(Math.max(i.after, 0.5) + 0.5)}"
+            title="${i.count} ${t.toLowerCase()} ${i.count === 1 ? 'residue' : 'residues'} (${i.from}–${i.to}) with no ${q.toLowerCase()} counterpart, after ${q.toLowerCase()} residue ${i.after}">${i.count >= 3 ? `+${i.count}` : ''}</div>`).join('');
+
+        const change = aminoAcids ? aminoAcids.replace(/[A-Z*]+$/, '') : (d.residue ? `residue ${d.residue}` : '');
+        let mark = '', note = '';
+        if (d.residue && d.residue_at_query) {
+            const on = d.residue_at_query === qResidue;
+            mark = `<div class="ovMark ${on ? 'ovOn' : 'ovOff'}" style="left:${pct(d.residue_at_query)}"><span>${escapeText(change)}</span></div>`;
+            if (!on) note = ` · aligns to ${q.toLowerCase()} ${d.residue_at_query}`;
+        } else if (d.residue) {
+            note = ' · variant residue has no counterpart';
+        }
+        const total = score['Total Score'] !== null && score['Total Score'] !== undefined ? ` · score ${score['Total Score']}` : '';
+        const details = `${d.length} aa${aminoAcids ? ` · ${escapeText(aminoAcids)}` : ''}${note}${total}`;
+        return `<div class="ovRow${current}">
+            <div class="ovLabel"><strong>${txLabel}</strong><span>${details}</span></div>
+            <div class="ovTrack" style="${trackHeight(d.domain_segments)}">${guide}${baseline}${blocks}${strips(d.domain_segments)}${inserts}${mark}</div></div>`;
+    }).join('');
+
+    const offCount = data.targets.filter(d => !d.error && d.residue && d.residue_at_query !== qResidue).length;
+    const summary = `${targets.length} ${t.toLowerCase()} ${targets.length === 1 ? 'transcript' : 'transcripts'} of ${alleleLabel}, `
+        + `aligned to ${q.toLowerCase()} ${escapeText(data.query.transcript)} and drawn on its residue numbering (1–${L}). `
+        + (qResidue ? `The dashed line marks ${q.toLowerCase()} ${escapeText(qLabel)}. ` : '')
+        + (offCount ? `${offCount} ${offCount === 1 ? 'transcript has its' : 'transcripts have their'} variant residue somewhere else.`
+                    : 'Every transcript\'s variant residue lines up with it, whatever its own residue number.');
+
+    return `
+        <p class="alignSummary">${summary}</p>
+        ${domainLegend([data.query.domains || [], ...data.targets.map(d => d.domain_segments || [])], colors)}
+        <div class="ovChart">${axis}${queryTrack}${rows}</div>
+        <p class="alignKey"><span class="ovKeyBlock"></span> aligned residues
+            <span class="ovKeyLine"></span> ${q.toLowerCase()} residues this transcript lacks
+            <span class="ovKeyInsert"></span> residues only in this transcript
+            <span class="ovKeyMark ovOn"></span> variant residue aligned with the ${q.toLowerCase()} variant
+            <span class="ovKeyMark ovOff"></span> variant residue elsewhere.
+            Coloured strips beneath each bar: Pfam domains, placed by the alignment on ${q.toLowerCase()} numbering.
+            Hover over a bar or strip for its residue numbers.</p>`;
 }
 
 
@@ -1018,6 +1402,14 @@ function formatCell(row, col, tableId, org) {
     // Score rows link the allele symbol to its MGI allele page (the AlleleID column is hidden)
     if (col === 'Allele Symbol' && tableId === 'scoresTable' && row['AlleleID'] && value) {
         value = `<a href="https://www.informatics.jax.org/allele/${row['AlleleID']}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+    }
+
+    // Aligned Position opens a drawing of all the allele's transcripts aligned to the query transcript
+    if (col === 'Aligned Position' && tableId === 'scoresTable' && value !== null && value !== '' && row['Query Transcript ID']) {
+        const key = org === 'human' ? row['AlleleID'] : row['Name'];
+        value = `<button type="button" class="overviewToggle" aria-expanded="false" title="Compare all transcripts"
+            data-key="${escapeText(String(key ?? ''))}" data-tx="${escapeText(row['Transcript ID'] || '')}"
+            data-qtx="${escapeText(row['Query Transcript ID'])}">${value}</button>`;
     }
 
     // Criteria that don't apply to the variant's scoring class

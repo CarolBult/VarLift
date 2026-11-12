@@ -33,6 +33,13 @@ data:
   ensembl_mus_gff3: "https://ftp.ensembl.org/pub/release-{ensemble_version}/gff3/mus_musculus/Mus_musculus.GRCm39.{ensemble_version}.gff3.gz"
   ensembl_hum_pep: "https://ftp.ensembl.org/pub/release-{ensemble_version}/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz"
   ensembl_mus_pep: "https://ftp.ensembl.org/pub/release-{ensemble_version}/fasta/mus_musculus/pep/Mus_musculus.GRCm39.pep.all.fa.gz"
+  ensembl_hum_cds: "https://ftp.ensembl.org/pub/release-{ensemble_version}/fasta/homo_sapiens/cds/Homo_sapiens.GRCh38.cds.all.fa.gz"
+  ensembl_mus_cds: "https://ftp.ensembl.org/pub/release-{ensemble_version}/fasta/mus_musculus/cds/Mus_musculus.GRCm39.cds.all.fa.gz"
+  # Core database table dumps holding protein domain (Pfam) positions; {table} is analysis, translation, transcript or protein_feature
+  # Pfam family descriptions and clans, for the domain names shown on the alignment views
+  pfam_clans: "https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.clans.tsv.gz"
+  ensembl_hum_core_table: "https://ftp.ensembl.org/pub/release-{ensemble_version}/mysql/homo_sapiens_core_{ensemble_version}_38/{table}.txt.gz"
+  ensembl_mus_core_table: "https://ftp.ensembl.org/pub/release-{ensemble_version}/mysql/mus_musculus_core_{ensemble_version}_39/{table}.txt.gz"
 
 
 paths:
@@ -70,12 +77,21 @@ paths:
   ensembl_mus_gff3: "app/data/Ensembl/Mus_musculus.GRCm39.{ensemble_version}.gff3.gz"
   ensembl_hum_pep: "app/data/Ensembl/Homo_sapiens.GRCh38.{ensemble_version}.pep.all.fa.gz"
   ensembl_mus_pep: "app/data/Ensembl/Mus_musculus.GRCm39.{ensemble_version}.pep.all.fa.gz"
+  ensembl_hum_cds: "app/data/Ensembl/Homo_sapiens.GRCh38.{ensemble_version}.cds.all.fa.gz"
+  ensembl_mus_cds: "app/data/Ensembl/Mus_musculus.GRCm39.{ensemble_version}.cds.all.fa.gz"
+  pfam_clans: "app/data/InterPro/Pfam-A.clans.tsv.gz"
+  ensembl_hum_core_dir: "app/data/Ensembl/mysql/homo_sapiens_core_{ensemble_version}_38"
+  ensembl_mus_core_dir: "app/data/Ensembl/mysql/mus_musculus_core_{ensemble_version}_39"
   mouse_gene_pqt: "app/data/Ensembl/mouse_gene_data.parquet"
   human_gene_pqt: "app/data/Ensembl/human_gene_data.parquet"
   mouse_exon_pqt: "app/data/Ensembl/mouse_exon_data.parquet"
   human_exon_pqt: "app/data/Ensembl/human_exon_data.parquet"
   mouse_protein_pqt: "app/data/Ensembl/mouse_protein_data.parquet"
   human_protein_pqt: "app/data/Ensembl/human_protein_data.parquet"
+  mouse_cds_pqt: "app/data/Ensembl/mouse_cds_data.parquet"
+  human_cds_pqt: "app/data/Ensembl/human_cds_data.parquet"
+  mouse_domain_pqt: "app/data/Ensembl/mouse_domain_data.parquet"
+  human_domain_pqt: "app/data/Ensembl/human_domain_data.parquet"
 
   apptainer_main: "/main"
   apptainer_cache: "/opt/vep/.vep"
