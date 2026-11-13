@@ -288,7 +288,7 @@ function renderTables(name, gene) {
     const queryVariantHidden = ['Name', 'Submission', 'Gene Symbol', 'Biotype', 'refAA', 'protein_start', 'varAA',
                                 ...(org === 'human' ? ['MONDO_set'] : [])];
 
-    // Mouse Model Coverage: for human queries it comes before the mouse variants, as the
+    // Mouse Allele Coverage: for human queries it comes before the mouse variants, as the
     // overview of how many alleles could be evaluated ahead of the per-allele detail
     const coverage = coverageSection(alleleCoverage, org === 'human' ? homolog : gene, org);
 
@@ -823,7 +823,7 @@ function overviewView(data, targets, qChange, variantLabel, clickedTx, gene) {
 }
 
 
-// Mouse Model Coverage table and its summary line
+// Mouse Allele Coverage table and its summary line
 // PHENOTYPE SIMILARITY (human queries)
 // One row per evaluated allele, in the order of the scoring table, with each phenotype
 // score and a button that opens the term mapping behind it in a row beneath the allele.
@@ -847,7 +847,7 @@ function phenotypeSimilaritySection(name, gene, sortedScores) {
 
     const score = v => (v === null || v === undefined) ? '<span class="naScore">—</span>' : Number(v).toFixed(2);
     const button = (row, kind) =>
-        `<button type="button" class="phenotypeToggle mappingToggle" data-allele="${row['AlleleID']}" data-kind="${kind}" aria-expanded="false">Term mapping</button>`;
+        `<button type="button" class="phenotypeToggle mappingToggle" data-allele="${row['AlleleID']}" data-kind="${kind}" aria-expanded="false">Phenotype term mapping</button>`;
 
     const body = rows.map(row => {
         const aid = row['AlleleID'];
@@ -870,7 +870,7 @@ function phenotypeSimilaritySection(name, gene, sortedScores) {
             The score, from 0 to 1, is how much of the allele's phenotype the human terms account for.
             <strong>Variant</strong> compares with each disease of the human variant and reports the best;
             <strong>Gene</strong> compares with all HPO terms of ${escapeText(gene)}.
-            Open <em>Term mapping</em> to see every term behind a score.</p>
+            Open <em>Phenotype term mapping</em> to see every term behind a score.</p>
             <table id="phenotypeSimilarityTable" class="table.dataTable">
                 <thead><tr>
                     <th>Mouse Allele</th>
@@ -1023,7 +1023,7 @@ function coverageSection(alleleCoverage, gene, org) {
 
     return `
         <div class='tableWrapper'>
-            <h2>Mouse Model Coverage</h2>
+            <h2>Mouse Allele Coverage</h2>
             <p class="coverageSummary">${summary}</p>
             ${jsonToHTMLTable(alleleCoverage, "alleleCoverageTable")}
         </div>`;
@@ -1166,8 +1166,11 @@ function jsonToHTMLTable(data, tableId) {
     let html = `<table id="${tableId}" class="table.dataTable">`;
     html += `<thead><tr>`;
 
-    // Coverage table: the allele's disease models are human diseases
-    const label = col => (tableId === 'alleleCoverageTable' && col === 'Diseases') ? 'Human Diseases Modeled' : col;
+    // Coverage table: the allele's disease models are human diseases. Human Variants
+    // Evaluated: ClinVar's submitted conditions
+    const label = col => (tableId === 'alleleCoverageTable' && col === 'Diseases') ? 'Human Diseases Modeled'
+        : (tableId === 'outputVariantTable' && org === 'mouse' && col === 'Associated Diseases') ? 'Associated Conditions'
+        : col;
 
     columns.forEach(col => {
         html += `<th>${label(col)}</th>`;
@@ -1280,6 +1283,12 @@ function variantFields(row) {
         delete out['AlleleID'];
     }
 
+    // The linked Pfam ID goes in parentheses after the domain name
+    if (row['Pfam Domain ID'] && row['Pfam Domain Name']) {
+        out['Pfam Domain Name'] = `${row['Pfam Domain Name']} (${formatCell(row, 'Pfam Domain ID')})`;
+        delete out['Pfam Domain ID'];
+    }
+
     const match = String(row['Name'] || '').match(/^([^:]+):(\d+)-(\d+):([^/]+)\/(.+)$/);
     if (!match) return displayFields(out);
 
@@ -1336,7 +1345,9 @@ function jsonToFieldList(data, tableId, hidden = [], headers = null) {
     }
     html += `<tbody>`;
     fields.forEach(col => {
-        html += `<tr><th scope="row">${col}</th>`;
+        // A submitted human variant's diseases are ClinVar's submitted conditions
+        const label = tableId === 'queryVariantTable' && org === 'human' && col === 'Associated Diseases' ? 'Associated Conditions' : col;
+        html += `<tr><th scope="row">${label}</th>`;
         data.forEach(row => {
             html += `<td>${formatCell(row, col, tableId, org)}</td>`;
         });

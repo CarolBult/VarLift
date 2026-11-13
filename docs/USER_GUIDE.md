@@ -69,7 +69,7 @@ A single variant usually finishes in a few seconds to a minute. Genes with many 
 
 ## 3. Reading the results
 
-The screenshots below come from the human query **ACVR1 R206H** (`2:157774114-157774114:C/T`). For each variant, the page shows the sections in this order: Submitted Variant, Genes, Mouse Model Coverage, Mouse Variants Evaluated, Variant Equivalency Scoring and Phenotype Similarity.
+The screenshots below come from the human query **ACVR1 R206H** (`2:157774114-157774114:C/T`). For each variant, the page shows the sections in this order: Submitted Variant, Genes, Mouse Allele Coverage, Mouse Variants Evaluated, Variant Equivalency Scoring and Phenotype Similarity.
 
 ### Submitted Human Variant
 
@@ -79,7 +79,7 @@ The screenshots below come from the human query **ACVR1 R206H** (`2:157774114-15
 2. **Pfam Domain**: the protein domain the variant falls in, if any. It links to InterPro.
 3. **PolyPhen**: the predicted effect of a missense change. It is shown for reference and is not used in scoring.
 4. **Molecular Consequence**: decides which set of scoring criteria applies (Section 4).
-5. **Associated Diseases**: the variant's diseases from ClinVar, each followed by its linked MONDO ID.
+5. **Associated Conditions**: the variant's conditions from ClinVar, each followed by its linked MONDO ID.
 6. **HP_IDs_variant**: HPO terms for this variant, from ClinVar and from the HPO annotations of its diseases. Click to list them.
 7. **HP_IDs_gene**: every HPO term annotated to the gene. These are used for the gene-level phenotype score.
 
@@ -91,16 +91,16 @@ The screenshots below come from the human query **ACVR1 R206H** (`2:157774114-15
 2. **Gene Symbol** links to HGNC (human) or MGI (mouse).
 3. **Cross References** gives the Ensembl gene ID and the NCBI Gene ID, each linked to its database.
 
-### Mouse Model Coverage
+### Mouse Allele Coverage
 
 This section shows how many of the gene's mouse alleles VarLift could assess, and why the rest could not be assessed.
 
-![Mouse Model Coverage table](images/06-coverage.png)
+![Mouse Allele Coverage table](images/06-coverage.png)
 
 1. **Summary.** How many of the gene's MGI alleles were evaluated, and how many of those have a disease association.
 2. **Human Diseases Modeled.** The diseases MGI curates the allele as a model of. "No disease association" means MGI does not list the allele as a disease model. VarLift still scores it.
 3. **Evaluated.** `true` means VarLift scored the allele. Evaluated alleles are listed first.
-4. **Reason.** Why an allele was not evaluated. Usually the allele has no genomic coordinates in MGI (for example, many knockouts, gene traps and transgenes), or its consequence cannot be scored (for example, a 5′ UTR change).
+4. **Reason.** Click `false` under Evaluated to see why an allele was not evaluated. Usually the allele has no genomic coordinates in MGI (for example, many knockouts, gene traps and transgenes), or its consequence cannot be scored (for example, a 5′ UTR change).
 5. **Phenotypes.** Click to list the allele's MGI phenotypes. "Normal" annotations (see Section 5) are counted separately.
 
 ### Mouse Variants Evaluated
@@ -132,7 +132,7 @@ Rows are grouped by allele. Alleles are ordered by their best-scoring transcript
 2. **MP Terms Mapped to HPO.** How many of the allele's scored MP terms have a translation to HPO, for example "9 of 17". A low ratio means much of the mouse phenotype cannot be compared.
 3. **Variant Phenotype Score.** Similarity to the phenotypes of the variant's own disease(s), from 0 to 1.
 4. **Gene Phenotype Score.** Similarity to every phenotype annotated to the human gene, from 0 to 1.
-5. **Term mapping.** Opens the term-by-term breakdown behind a score.
+5. **Phenotype term mapping.** Opens the term-by-term breakdown behind a score.
 
 A dash (—) means the allele has no translatable phenotypes, so no score is possible. It does not mean a score of zero.
 
@@ -152,7 +152,7 @@ Rows shaded green have a similarity of 0.5 or more (darker for identical terms).
 
 ### Mouse queries
 
-For a submitted mouse variant, the page shows **Human Variants Evaluated** (the candidate ClinVar variants) and scores each one. Disease Match and Phenotype Similarity are not calculated. The page instead shows **Human Phenotypes** and the Mouse Model Coverage of the submitted gene.
+For a submitted mouse variant, the page shows **Human Variants Evaluated** (the candidate ClinVar variants) and scores each one. Disease Match and Phenotype Similarity are not calculated. The page instead shows **Human Phenotypes** and the Mouse Allele Coverage of the submitted gene.
 
 The example below is a Pax6 splice-donor variant (`2:105522966-105522966:G/T`). It shows the Splice/Intronic scoring class:
 
@@ -317,7 +317,7 @@ How often the source resources themselves are released (approximate):
 
 - **Assemblies.** Human coordinates must be GRCh38 and mouse coordinates GRCm39.
 - **Variant types.** Only coding, splice-site and intronic variants are scored. Other variants are reported as not evaluated.
-- **Mouse alleles without coordinates.** Many knockouts, gene traps and transgenes have no genomic coordinates in MGI, so they cannot be scored. They still appear in the Mouse Model Coverage table with the reason.
+- **Mouse alleles without coordinates.** Many knockouts, gene traps and transgenes have no genomic coordinates in MGI, so they cannot be scored. They still appear in the Mouse Allele Coverage table, where clicking "false" under Evaluated shows the reason.
 - **One-to-one orthologs.** Orthologs come from MGI's protein-coding homology report. Genes without a human–mouse ortholog there cannot be mapped.
 - **Disease Match uses exact MONDO IDs.** A mouse model of a closely related disease (a parent or child term in MONDO) does not count as a match.
 - **Phenotype coverage depends on the MP–HPO mappings.** MP terms without a curated HPO mapping cannot contribute. Check **MP Terms Mapped to HPO** before reading a low score as a poor model.
