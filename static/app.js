@@ -303,7 +303,7 @@ function renderTables(name, gene) {
 
     // Mouse Allele Coverage: for human queries it comes before the mouse variants, as the
     // overview of how many alleles could be evaluated ahead of the per-allele detail
-    const coverage = coverageSection(alleleCoverage, org === 'human' ? homolog : gene, org);
+    const coverage = coverageSection(alleleCoverage, org === 'human' ? homolog : gene, org, name);
 
     // Create HTML tables
     results.innerHTML = `
@@ -610,7 +610,7 @@ function alignmentView(data, queryRow) {
             lead += `The ${t.toLowerCase()} variant is at residue ${data.target.residue}, which does not align to it. `;
         }
     }
-    const change = queryRow && queryRow['Sequence Change'] ? ` The submitted change is ${escapeText(queryRow['Sequence Change'])}.` : '';
+    const change = queryRow && queryRow['Sequence Change'] ? ` ${capitalize(withTag('the submitted change', queryRow['Name']))} is ${escapeText(queryRow['Sequence Change'])}.` : '';
 
     const identity = `Proteins ${data.query.length} and ${data.target.length} residues long; `
         + `${st.protein_identity}% identical over ${st.aligned_residues} aligned residues`
@@ -744,7 +744,11 @@ function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, s
         });
         const current = org === 'human' ? tx : qtx;
         const humanChange = human.variant ? human.variant['Amino Acids'] : null;
-        const label = org === 'human' ? `the ${(group[0] && group[0]['Allele Symbol']) || key} variant` : 'the submitted mouse variant';
+        const submittedName = queryProteins[0] && queryProteins[0]['Name'];
+        const label = org === 'human' ? `the ${(group[0] && group[0]['Allele Symbol']) || key} variant`
+            : withTag('the submitted mouse variant', submittedName);
+        // On human queries the dashed line is the submitted variant's residue
+        const humanTag = org === 'human' ? withTag('', submittedName).trim() : '';
 
         row.child('<div class="txOverview"><p class="alignNote">Aligning transcripts…</p></div>').show();
         const view = $(row.child()).find('.txOverview');
@@ -761,7 +765,7 @@ function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, s
             .then(response => response.json().then(body => ({ ok: response.ok, body })))
             .then(({ ok, body }) => {
                 if (!ok) throw new Error(body.error || 'The transcripts could not be aligned.');
-                view.html(overviewView(body, tracks, humanChange, label, current, mouseGene) + alignActions());
+                view.html(overviewView(body, tracks, humanChange, label, current, mouseGene, humanTag) + alignActions());
             })
             .catch(error => view.html(`<p class="alignNote">${escapeText(error.message)}</p>${alignActions()}`));
     });
@@ -771,7 +775,7 @@ function axisStep(length) {
     return length <= 200 ? 50 : length <= 600 ? 100 : length <= 1500 ? 250 : length <= 4000 ? 500 : 5000;
 }
 
-function overviewView(data, targets, qChange, variantLabel, clickedTx, gene) {
+function overviewView(data, targets, qChange, variantLabel, clickedTx, gene, queryTag = '') {
     const q = SPECIES_LABEL[data.query.species], t = SPECIES_LABEL[data.target_species];
     const L = data.query.length;
     const pct = residue => `${(100 * (residue - 0.5) / L).toFixed(3)}%`;
@@ -837,7 +841,7 @@ function overviewView(data, targets, qChange, variantLabel, clickedTx, gene) {
         + `${one ? '' : 'each '}aligned to ${q.toLowerCase()} ${escapeText(data.query.transcript)} and drawn on its residue numbering (1–${L}). `
         + `The mark on ${one ? 'the' : 'each'} transcript shows where ${variantLabel} falls in that transcript. `
         + (targets.some(x => x.tx === clickedTx) ? 'The highlighted row is the transcript of the table row selected. ' : '')
-        + (qResidue ? `The dashed line marks ${q.toLowerCase()} ${escapeText(qLabel)}. ` : '')
+        + (qResidue ? `The dashed line marks ${q.toLowerCase()} ${escapeText(qLabel)}${queryTag ? `, the submitted variant ${queryTag}` : ''}. ` : '')
         + (offCount ? `In ${offCount} ${offCount === 1 ? 'transcript' : 'transcripts'} the variant residue aligns somewhere else.`
             : one ? 'In the transcript the variant residue aligns with it, whatever its residue number in that transcript.'
                   : 'In every transcript the variant residue aligns with it, whatever its residue number in that transcript.');
@@ -901,7 +905,7 @@ function phenotypeSimilaritySection(name, gene, sortedScores) {
             Mouse (MP) terms are translated to human (HPO) terms, and each translated term is matched to its closest
             human term by semantic similarity (1 for the identical term, less for a broader, narrower or related term).
             The score, from 0 to 1, is how much of the allele's phenotype the human terms account for.
-            <strong>Variant</strong> compares with each disease of the human variant and reports the best;
+            <strong>Variant</strong> compares with each disease of ${withTag('the submitted human variant', name)} and reports the best;
             <strong>Gene</strong> compares with all HPO terms of ${escapeText(gene)}.
             Open <em>Phenotype term mapping</em> to see every term behind a score.</p>
             <table id="phenotypeSimilarityTable" class="table.dataTable">
@@ -1023,7 +1027,10 @@ function mappingView(row, kind) {
 }
 
 
-function coverageSection(alleleCoverage, gene, org) {
+function coverageSection(alleleCoverage, gene, org, name) {
+    // The label entered with the variant, e.g. "The submitted variant (pikachu) corresponds to ..."
+    const variant = withTag('the submitted variant', name);
+
     const total = alleleCoverage.length;
     let summary;
 
@@ -1050,8 +1057,8 @@ function coverageSection(alleleCoverage, gene, org) {
                 ? ` ${total === 1 ? 'It has' : 'None of them have'} variant coordinates in MGI (e.g. large deletions or knockouts).`
                 : ` ${noCoordinates} of them have no variant coordinates in MGI (e.g. large deletions or knockouts).`;
         summary = `${counts} ${submitted.length > 0
-            ? `The submitted variant corresponds to ${submitted.join(', ')}.`
-            : `The submitted variant's coordinates do not match any of them.${coordinates}`}`;
+            ? `${capitalize(variant)} corresponds to ${submitted.join(', ')}.`
+            : `The coordinates of ${variant} do not match any of them.${coordinates}`}`;
     }
 
     return `
@@ -1127,8 +1134,9 @@ function renderUnevaluated(name) {
         <div class='tableWrapper'>
             ${infoHeading('unevaluatedInfo', `Submitted ${queryOrganism} Variant (not evaluated)`, INFO.unevaluated(org))}
             <p class="coverageSummary">${rows[0]['Reason']}. No homologous variants or similarity scores are reported. ${org === 'mouse'
-                ? (hasAlleles ? 'The MGI allele(s) at this position are listed below.' : 'No MGI allele matches this position and allele.')
-                : 'ClinVar disease associations for this variant are listed below.'}</p>
+                ? (hasAlleles ? `The MGI allele(s) at the position of ${withTag('the submitted variant', name)} are listed below.`
+                              : `No MGI allele matches the position and allele of ${withTag('the submitted variant', name)}.`)
+                : `ClinVar disease associations for ${withTag('the submitted variant', name)} are listed below.`}</p>
             ${jsonToHTMLTable(rows, 'unevaluatedTable')}
         </div>
 
@@ -1138,7 +1146,7 @@ function renderUnevaluated(name) {
             ${jsonToHTMLTable(phenotypes, 'unevaluatedPhenotypeTable')}
         </div>`}
 
-        ${alleleCoverage.length === 0 ? '' : coverageSection(alleleCoverage, gene, org)}
+        ${alleleCoverage.length === 0 ? '' : coverageSection(alleleCoverage, gene, org, name)}
     `;
 
     const table = $('#unevaluatedTable').DataTable({
@@ -1370,7 +1378,10 @@ const INFO = {
                 ${human ? `
                 <dt>Associated Conditions</dt><dd>The variant's conditions in ClinVar, with their MONDO IDs.</dd>
                 <dt>HP_IDs_variant</dt><dd>HPO terms for this variant, from ClinVar and the HPO annotations of its diseases. Used for the variant phenotype score.</dd>
-                <dt>HP_IDs_gene</dt><dd>Every HPO term annotated to the gene. Used for the gene phenotype score.</dd>` : `
+                <dt>HP_IDs_gene</dt><dd>Every HPO term annotated to the gene. These come from the Human Phenotype Ontology's
+                    <a href="https://purl.obolibrary.org/obo/hp/hpoa/genes_to_phenotype.txt" target="_blank" rel="noopener noreferrer">genes_to_phenotype.txt</a> file,
+                    which gives a gene the phenotypes of every disease it is associated with (from OMIM and Orphanet), so they
+                    are not specific to this variant. Used for the gene phenotype score.</dd>` : `
                 <dt>AlleleSymbol</dt><dd>MGI alleles at exactly this position and change, linked to MGI.</dd>
                 <dt>Associated Diseases</dt><dd>The diseases those alleles model, with their MONDO IDs.</dd>`}
             </dl>`;
@@ -1457,10 +1468,13 @@ const INFO = {
                     <tr><td>1</td><td><b>Identical change</b> at the aligned residue, where the proteins align well around it (names the Pfam domain, if any)</td><td><b>Same splice site and offset</b></td></tr>
                     <tr><td>2</td><td><b>Same residue</b>, a different change; an identical change where the alignment is uncertain; or two truncating variants within 10 residues</td><td><b>Same splice site</b>, a different offset on the same side of the intron</td></tr>
                     <tr><td>3</td><td><b>Same domain</b>: same consequence, in Pfam domains of the same clan</td><td><b>Same intron</b>, deeper in the intron</td></tr>
-                    <tr><td>4</td><td><b>Same consequence</b>, elsewhere in the protein</td><td><b>Different intron</b></td></tr>
+                    <tr><td>4</td><td><b>Same consequence</b>, elsewhere in the protein. The amino-acid change may or may not be the same; see AA Match</td><td><b>Different intron</b>: both splice or intronic, in introns that are not equivalent</td></tr>
                     <tr><td>5</td><td><b>Different consequence</b></td><td><b>Different consequence</b></td></tr>
                 </tbody>
             </table>
+            <p>The tiers are checked in order and the first that applies is used. An identical amino-acid change counts only at
+               the equivalent residue (Tier 1); the same change at a different residue is usually Tier 3 or 4.${human ? '' : ` Coding
+               candidate human variants are chosen by the same amino-acid change, so their AA Match is usually <code>true</code> at every tier.`}</p>
             <p>${human ? 'Alleles' : 'Variants'} are ordered by their best tier on a protein-coding transcript${human ? ', then by Disease Match' : ''}.
                See the <a href="/help#4-how-variant-equivalence-is-scored" target="_blank">User Guide</a> for details.</p>`;
     },
@@ -1522,6 +1536,17 @@ const INFO = {
             <dt>Normal Phenotypes</dt><dd>Annotations recording that a phenotype was examined and found normal.</dd>
         </dl>`,
 };
+
+
+// "text (label)" when the submitted variant was entered with a label, otherwise just the text
+function capitalize(text) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function withTag(text, name) {
+    const label = name && window.fullJSON && (window.fullJSON.labels || {})[name];
+    return label ? `${text} (${escapeText(label)})` : text;
+}
 
 
 // The label entered with a submitted variant, as its first field (display only)

@@ -202,8 +202,10 @@ Each variant pair is placed in a tier according to what it shares, so a tier mea
 | 1 | **Identical change**: the same amino-acid change at the aligned residue, where the proteins align well around it. The label names the Pfam domain the change is in, if any | **Same splice site and offset**: equivalent intron, same offset |
 | 2 | **Same residue**: the aligned residue, a different change. Also an identical change where the alignment around the residue is uncertain, and two truncating variants (stop gained or frameshift) within 10 residues of each other in the alignment | **Same splice site**: equivalent intron, both splice-site or splice-region variants on the same side of the intron |
 | 3 | **Same domain**: the same consequence, in Pfam domains of the same clan | **Same intron**: equivalent intron, deeper in the intron |
-| 4 | **Same consequence**: elsewhere in the protein | **Different intron** |
+| 4 | **Same consequence**: elsewhere in the protein. The amino-acid change may or may not be the same; see AA Match | **Different intron**: both splice or intronic, in introns that are not equivalent |
 | 5 | **Different consequence** | **Different consequence** |
+
+The tiers are checked in order and the first that applies is used. An identical amino-acid change counts only at the equivalent residue (Tier 1); the same change at a different residue is usually Tier 3 or 4. For mouse queries, coding candidate human variants are chosen by the same amino-acid change, so their AA Match is usually `true` at every tier.
 
 A domain is not required for Tier 1: many disease variants lie outside Pfam domains, and an identical change at a well-aligned residue is equally equivalent there. Instead, Tier 1 requires the alignment around the residue to be reliable: at least 30% of the 10 residues on each side must align to identical residues (human–mouse orthologs are usually above 80%; unrelated proteins average about 14%). Otherwise the label reads "alignment uncertain" and the pair is Tier 2.
 

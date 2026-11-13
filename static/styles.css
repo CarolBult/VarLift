@@ -1289,3 +1289,9 @@ pre.alignText {
     font-size: 13px;
     padding: 5px 10px;
 }
+
+/* Tab mark between a variant and its label in the examples */
+.exampleTab {
+    margin: 0 4px;
+    color: #8a96a8;
+}
