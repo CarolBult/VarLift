@@ -892,7 +892,8 @@ pre.alignText {
 }
 
 .alignmentView button.alignFull,
-.alignmentView button.alignWindow {
+.alignmentView button.alignWindow,
+.alignActions button.alignClose {
     margin-top: 4px;
     font-size: 13px;
     padding: 5px 10px;
@@ -1270,4 +1271,21 @@ pre.alignText {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+/* Bottom row of an alignment or transcript overview: Close sits beside the other
+   buttons, not at the far right, which can be off screen when the table is wider than the window */
+.alignActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* Stays in view when the table is scrolled sideways */
+    width: max-content;
+    position: sticky;
+    left: 8px;
+}
+
+.alignActions button.alignClose {
+    font-size: 13px;
+    padding: 5px 10px;
 }

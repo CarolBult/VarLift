@@ -537,7 +537,8 @@ function initAlignmentToggles(dataTable, org, queryProteins, scores) {
             .sort((a, b) => (a['Equivalency Tier'] ?? 99) - (b['Equivalency Tier'] ?? 99));
         const queryTxs = [...new Set(pairs.map(s => s['Query Transcript ID']))];
         if (queryTxs.length === 0) {
-            row.child('<div class="alignmentView"><p class="alignNote">No scored query transcript to align with.</p></div>').show();
+            row.child(`<div class="alignmentView"><p class="alignNote">No scored query transcript to align with.</p>${alignActions()}</div>`).show();
+            initCloseButton($(row.child()).find('.alignmentView'), row, this);
             return;
         }
 
@@ -546,6 +547,7 @@ function initAlignmentToggles(dataTable, org, queryProteins, scores) {
             : '';
         row.child(`<div class="alignmentView">${picker}<div class="alignBody"><p class="alignNote">Aligning…</p></div></div>`).show();
         const view = $(row.child()).find('.alignmentView');
+        initCloseButton(view, row, this);
 
         const load = (queryTx, full) => {
             const queryRow = queryProteins.find(r => r['Transcript ID'] === queryTx);
@@ -566,7 +568,7 @@ function initAlignmentToggles(dataTable, org, queryProteins, scores) {
                     view.find('button.alignFull').on('click', () => load(queryTx, true));
                     view.find('button.alignWindow').on('click', () => load(queryTx, false));
                 })
-                .catch(error => view.find('.alignBody').html(`<p class="alignNote">${escapeText(error.message)}</p>`));
+                .catch(error => view.find('.alignBody').html(`<p class="alignNote">${escapeText(error.message)}</p>${alignActions()}`));
         };
 
         view.find('select').on('change', function () { load(this.value, false); });
@@ -575,6 +577,20 @@ function initAlignmentToggles(dataTable, org, queryProteins, scores) {
 }
 
 const SPECIES_LABEL = { human: 'Human', mouse: 'Mouse' };
+
+// Bottom row of an alignment or overview: optional buttons, then Close beside them
+function alignActions(left = '') {
+    return `<div class="alignActions">${left}<button type="button" class="alignClose">Close</button></div>`;
+}
+
+// Close closes the panel beneath the row, as clicking the row's own button again does
+function initCloseButton(view, row, button) {
+    view.on('click', 'button.alignClose', () => {
+        row.child.hide();
+        button.setAttribute('aria-expanded', 'false');
+        button.focus();
+    });
+}
 
 // Summary, gap list and the printed alignment
 function alignmentView(data, queryRow) {
@@ -628,7 +644,7 @@ function alignmentView(data, queryRow) {
         <div class="alignScroll"><pre class="alignText">${alignmentText(cols, data, q, t, colors)}</pre></div>
         <p class="alignKey"><span class="alnVariant">Highlighted</span>: variant residue. <span class="alnDiff">Bold red</span>: base differs.
            | identical residue, . different residue.</p>
-        ${toggle}`;
+        ${alignActions(toggle)}`;
 }
 
 // Printed alignment, ALIGN_BLOCK columns per line group: query codons, query residues,
@@ -732,6 +748,7 @@ function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, s
 
         row.child('<div class="txOverview"><p class="alignNote">Aligning transcripts…</p></div>').show();
         const view = $(row.child()).find('.txOverview');
+        initCloseButton(view, row, this);
 
         fetch('/transcript_overview', {
             method: 'POST',
@@ -744,9 +761,9 @@ function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, s
             .then(response => response.json().then(body => ({ ok: response.ok, body })))
             .then(({ ok, body }) => {
                 if (!ok) throw new Error(body.error || 'The transcripts could not be aligned.');
-                view.html(overviewView(body, tracks, humanChange, label, current, mouseGene));
+                view.html(overviewView(body, tracks, humanChange, label, current, mouseGene) + alignActions());
             })
-            .catch(error => view.html(`<p class="alignNote">${escapeText(error.message)}</p>`));
+            .catch(error => view.html(`<p class="alignNote">${escapeText(error.message)}</p>${alignActions()}`));
     });
 }
 
