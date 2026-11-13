@@ -8,32 +8,35 @@ from app.variant_scoring import scoring_class, SPLICE
 def process_batch_query(input):
     '''
     Processes a string resulting from the batch input of variants with formatting:
-    chromosome:start-end:ref/allele
+    chromosome:start-end:ref/allele, optionally followed by a tab (or spaces) and a label.
+    The label is only displayed with the submitted variant; it is not used in the analysis.
 
     Parameters:
         input: string. Multiline string containg all variants to process.
 
-    Returns: DataFrame. Containing Chromosome, Start, Ref, Alt, for each variant.
+    Returns: DataFrame. Containing Name, Chromosome, Start, Stop, Ref, Alt and Label for each variant.
     '''
-    # Regex pattern to match each line: gene:chromosome:start-end:ref/allele
-    pattern = r'^(\w+):(\d+)-(\d+):([ACGTacgt]+)/([ACGTacgt]+)$'
+    # Regex pattern to match each line: chromosome:start-end:ref/allele [label]
+    pattern = r'^((\w+):(\d+)-(\d+):([ACGTacgt]+)/([ACGTacgt]+))(?:\s+(.*))?$'
 
     variants = []
     # Go through each line
     for line in input.splitlines():
-        if line.strip() == '':
+        line = line.strip()
+        if line == '':
             continue
-        
+
         # Extract inputted variant fields
         match = re.match(pattern, line)
         if match:
-            variants.append({'Name': match.group(0),
-                             'Chromosome': match.group(1),
-                             'Start': int(match.group(2)),
-                             'Stop': int(match.group(3)),
-                             'Ref': match.group(4),
-                             'Alt': match.group(5)})
-        
+            variants.append({'Name': match.group(1),
+                             'Chromosome': match.group(2),
+                             'Start': int(match.group(3)),
+                             'Stop': int(match.group(4)),
+                             'Ref': match.group(5),
+                             'Alt': match.group(6),
+                             'Label': (match.group(7) or '').strip()})
+
     # Create pandas dataframe
     variants = pd.DataFrame(variants)
 

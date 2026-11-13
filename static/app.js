@@ -29,6 +29,15 @@ document.querySelectorAll('.exampleVariant').forEach(function (example) {
 });
 
 // Run variant-model mapping for submitted variants on click.
+// Clear empties the variant box; results already shown stay until the next submission
+document.getElementById('clearButton').addEventListener('click', function () {
+    const input = document.getElementById('variantInput');
+    input.value = '';
+    showError('');
+    input.focus();
+});
+
+
 document.getElementById('runButton').addEventListener('click', function () {
     const vars = document.getElementById('variantInput').value;
     const org = document.getElementById('queryOrganism').value;
@@ -50,7 +59,10 @@ document.getElementById('runButton').addEventListener('click', function () {
         return data;
     })
     .then(data => {
-        // store full results
+        // store full results, with what was run so a downloaded copy can be reopened
+        data.organism = org;
+        data.input = vars;
+        data.run_at = new Date().toISOString();
         window.fullJSON = data;
 
         // build sidebar; a failure here is in the page, not the analysis
@@ -155,10 +167,18 @@ function buildSidebar(data) {
         return;
     }
 
-    function addButton(label, render) {
+    // Labels entered after a variant are shown beside it
+    const labels = data.labels || {};
+    function addButton(name, render) {
         const btn = document.createElement('button');
         btn.className = 'sidebar-button';
-        btn.textContent = label;
+        btn.textContent = name;
+        if (labels[name]) {
+            const tag = document.createElement('span');
+            tag.className = 'variantLabel';
+            tag.textContent = labels[name];
+            btn.append(' ', tag);
+        }
         btn.onclick = () => {
             // deactivate all other buttons
             document.querySelectorAll('#sidebar .sidebar-button')
@@ -288,12 +308,12 @@ function renderTables(name, gene) {
     // Create HTML tables
     results.innerHTML = `
         <div class='tableWrapper'>
-            <h2>Submitted ${queryOrganism} Variant</h2>
-            ${jsonToFieldList(queryProteins.map(variantFields), "queryVariantTable", queryVariantHidden)}
+            ${infoHeading('submittedInfo', `Submitted ${queryOrganism} Variant`, INFO.submitted(org))}
+            ${jsonToFieldList(queryProteins.map(row => withLabel(name, variantFields(row))), "queryVariantTable", queryVariantHidden)}
         </div>
 
         <div class='tableWrapper'>
-            <h2>Genes</h2>
+            ${infoHeading('genesInfo', 'Genes', INFO.genes(org))}
             ${jsonToFieldList([...queryGenes, ...outputGenes].map(geneFields), "genesTable", [],
                               [...queryGenes.map(() => `${queryOrganism} Gene`), ...outputGenes.map(() => `${targetOrganism} Homolog`)])}
         </div>
@@ -301,12 +321,12 @@ function renderTables(name, gene) {
         ${org === 'human' ? coverage : ''}
 
         <div class='tableWrapper'>
-            <h2>${targetOrganism} Variants Evaluated</h2>
+            ${infoHeading('variantsInfo', `${targetOrganism} Variants Evaluated`, INFO.variantsEvaluated(org))}
             ${jsonToHTMLTable(sortedOutputProteins.map(row => withAlignButton(displayFields(row), row, org)), "outputVariantTable")}
         </div>
 
         <div class='tableWrapper'>
-            <h2>Variant Equivalency Scoring</h2>
+            ${infoHeading('scoringInfo', 'Variant Equivalency Scoring', INFO.scoring(org))}
             ${jsonToHTMLTable(sortedScores, "scoresTable")}
         </div>
 
@@ -317,7 +337,7 @@ function renderTables(name, gene) {
 
         ${org === 'human' ? '' : `
         <div class='tableWrapper'>
-            <h2>${targetOrganism} Phenotypes</h2>
+            ${infoHeading('phenotypesInfo', `${targetOrganism} Phenotypes`, INFO.humanPhenotypes())}
             ${jsonToHTMLTable(phenotypes, "phenotypeTable")}
         </div>`}
     `;
@@ -784,7 +804,7 @@ function overviewView(data, targets, qChange, variantLabel, clickedTx, gene) {
         } else if (d.residue) {
             note = ' · variant residue has no counterpart';
         }
-        const total = score['Equivalency Tier'] !== null && score['Equivalency Tier'] !== undefined ? ` · tier ${score['Equivalency Tier']}` : '';
+        const total = score['Equivalency Tier'] !== null && score['Equivalency Tier'] !== undefined ? ` · Tier ${score['Equivalency Tier']}` : '';
         const details = `${d.length} aa${aminoAcids ? ` · ${escapeText(aminoAcids)}` : ''}${note}${total}`;
         return `<div class="ovRow${current}">
             <div class="ovLabel"><strong>${txLabel}</strong><span>${details}</span></div>
@@ -859,7 +879,7 @@ function phenotypeSimilaritySection(name, gene, sortedScores) {
 
     return `
         <div class='tableWrapper'>
-            <h2>Phenotype Similarity</h2>
+            ${infoHeading('similarityInfo', 'Phenotype Similarity', INFO.phenotypeSimilarity())}
             <p class="coverageSummary">How closely each evaluated allele's MGI phenotypes match the human phenotypes.
             Mouse (MP) terms are translated to human (HPO) terms, and each translated term is matched to its closest
             human term by semantic similarity (1 for the identical term, less for a broader, narrower or related term).
@@ -1019,7 +1039,7 @@ function coverageSection(alleleCoverage, gene, org) {
 
     return `
         <div class='tableWrapper'>
-            <h2>Mouse Allele Coverage</h2>
+            ${infoHeading('coverageInfo', 'Mouse Allele Coverage', INFO.coverage(org))}
             <p class="coverageSummary">${summary}</p>
             ${jsonToHTMLTable(alleleCoverage, "alleleCoverageTable")}
         </div>`;
@@ -1081,14 +1101,14 @@ function renderUnevaluated(name) {
                       'Normal Phenotypes': row['Normal Phenotypes'] || []}));
 
     // Biotype is a gene property, shown only in the Genes table
-    const rows = matches.map(({Phenotypes, 'Normal Phenotypes': _normal, Biotype, ...row}) => displayFields({
+    const rows = matches.map(({Phenotypes, 'Normal Phenotypes': _normal, Biotype, ...row}) => withLabel(name, displayFields({
         ...row,
         'Associated Diseases': isEmpty(row['Associated Diseases']) ? 'None reported' : row['Associated Diseases']
-    }));
+    })));
 
     results.innerHTML = `
         <div class='tableWrapper'>
-            <h2>Submitted ${queryOrganism} Variant (not evaluated)</h2>
+            ${infoHeading('unevaluatedInfo', `Submitted ${queryOrganism} Variant (not evaluated)`, INFO.unevaluated(org))}
             <p class="coverageSummary">${rows[0]['Reason']}. No homologous variants or similarity scores are reported. ${org === 'mouse'
                 ? (hasAlleles ? 'The MGI allele(s) at this position are listed below.' : 'No MGI allele matches this position and allele.')
                 : 'ClinVar disease associations for this variant are listed below.'}</p>
@@ -1097,7 +1117,7 @@ function renderUnevaluated(name) {
 
         ${phenotypes.length === 0 ? '' : `
         <div class='tableWrapper'>
-            <h2>${queryOrganism} Phenotypes</h2>
+            ${infoHeading('unevaluatedPhenotypesInfo', `${queryOrganism} Phenotypes`, INFO.unevaluatedPhenotypes())}
             ${jsonToHTMLTable(phenotypes, 'unevaluatedPhenotypeTable')}
         </div>`}
 
@@ -1166,6 +1186,7 @@ function jsonToHTMLTable(data, tableId) {
     // Evaluated: ClinVar's submitted conditions
     const label = col => (tableId === 'alleleCoverageTable' && col === 'Diseases') ? 'Human Diseases Modeled'
         : (tableId === 'outputVariantTable' && org === 'mouse' && col === 'Associated Diseases') ? 'Associated Conditions'
+        : (tableId === 'scoresTable' && col === 'Equivalency Tier') ? 'Equivalency Tier (1–5)'
         : col;
 
     columns.forEach(col => {
@@ -1271,11 +1292,239 @@ function geneFields(row) {
 // Variant row for display: a Genome Location field first, taken from the input name
 // chromosome:start-end:ref/alt (e.g. "Chr 2:105,522,966 G>T"), and on mouse
 // variants the linked allele ID in parentheses after the AlleleSymbol
+// Information button for a section heading; it opens the window with the same id
+function infoButton(id, title) {
+    return `<button type="button" class="infoButton" data-dialog="${id}" aria-label="About the ${title} table"
+        title="About this table">i</button>`;
+}
+
+
+// Closable information window explaining a results table
+function infoDialog(id, title, body) {
+    return `
+    <dialog id="${id}" class="infoDialog" aria-labelledby="${id}Title">
+        <div class="infoDialogHeader">
+            <h3 id="${id}Title">About the ${title} table</h3>
+            <button type="button" class="infoClose" aria-label="Close">&times;</button>
+        </div>
+        <div class="infoDialogBody">${body}</div>
+    </dialog>`;
+}
+
+
+// Heading with its information button, followed by the window
+function infoHeading(id, title, body, heading = title) {
+    return `<h2>${heading} ${infoButton(id, title)}</h2>${infoDialog(id, title, body)}`;
+}
+
+
+// Information buttons open their window; the close button, Escape or a click outside closes it.
+// Delegated, so it covers windows added each time the results are drawn
+document.addEventListener('click', event => {
+    const button = event.target.closest('.infoButton');
+    if (button) {
+        document.getElementById(button.dataset.dialog)?.showModal();
+        return;
+    }
+    if (event.target.closest('.infoClose')) {
+        event.target.closest('dialog').close();
+        return;
+    }
+    if (event.target instanceof HTMLDialogElement && event.target.classList.contains('infoDialog')) {
+        event.target.close();
+    }
+});
+
+
+const INFO = {
+    submitted: (org) => {
+        const human = org === 'human';
+        return `
+            <p>The variant you submitted, as annotated by Ensembl VEP on the ${human ? 'MANE Select human transcript (GRCh38)' : 'canonical mouse transcript (GRCm39)'}.
+               If the variant falls in several transcripts, each one gets its own column.</p>
+            <dl>
+                <dt>Label</dt><dd>The label you entered after the variant, if any. It is not used in the analysis.</dd>
+                <dt>Genome Location</dt><dd>Chromosome, position and change, as submitted.</dd>
+                <dt>Transcript ID, Exon / Intron</dt><dd>The transcript VEP annotated and where the variant falls in it.</dd>
+                <dt>Pfam Domain Name</dt><dd>The protein domain the variant is in, with its linked Pfam ID.</dd>
+                <dt>PolyPhen</dt><dd>The predicted effect of a missense change. Shown for reference; not used in scoring.</dd>
+                <dt>Molecular Consequence</dt><dd>VEP's consequence. It decides the scoring class (Coding or Splice/Intronic).</dd>
+                <dt>Sequence Change, Amino Acid Change</dt><dd>The codon and amino-acid change on this transcript.</dd>
+                ${human ? `
+                <dt>Associated Conditions</dt><dd>The variant's conditions in ClinVar, with their MONDO IDs.</dd>
+                <dt>HP_IDs_variant</dt><dd>HPO terms for this variant, from ClinVar and the HPO annotations of its diseases. Used for the variant phenotype score.</dd>
+                <dt>HP_IDs_gene</dt><dd>Every HPO term annotated to the gene. Used for the gene phenotype score.</dd>` : `
+                <dt>AlleleSymbol</dt><dd>MGI alleles at exactly this position and change, linked to MGI.</dd>
+                <dt>Associated Diseases</dt><dd>The diseases those alleles model, with their MONDO IDs.</dd>`}
+            </dl>`;
+    },
+
+    genes: (org) => `
+        <p>The gene the submitted variant is in and its ${org === 'human' ? 'mouse' : 'human'} ortholog, side by side.
+           The ortholog comes from MGI's human–mouse homology report.</p>
+        <dl>
+            <dt>Gene Symbol</dt><dd>Linked to HGNC (human) or MGI (mouse).</dd>
+            <dt>Gene Name, Biotype</dt><dd>The gene's full name and type (for example, protein_coding).</dd>
+            <dt>Genome Location</dt><dd>Chromosome, start–end and strand (GRCh38 for human, GRCm39 for mouse).</dd>
+            <dt>Cross References</dt><dd>The Ensembl gene ID and NCBI Gene ID, each linked to its database.</dd>
+        </dl>`,
+
+    variantsEvaluated: (org) => org === 'human' ? `
+        <p>Every MGI allele of the mouse ortholog that has genomic coordinates and a scorable consequence,
+           annotated by VEP on <strong>every</strong> mouse transcript it falls in. An allele therefore has one row per transcript.
+           Rows are in the same order as the Variant Equivalency Scoring table.</p>
+        <dl>
+            <dt>AlleleID, AlleleSymbol</dt><dd>The MGI allele, linked to its MGI page.</dd>
+            <dt>Align</dt><dd>Opens a codon-by-codon alignment of this transcript with the human transcript around the variant, with Pfam domains marked.</dd>
+            <dt>Transcript ID, Exon / Intron</dt><dd>The mouse transcript and where the allele falls in it.</dd>
+            <dt>Amino Acid Change</dt><dd>The change on that transcript. Residue numbers can differ between transcripts and between species.</dd>
+            <dt>Associated Diseases</dt><dd>The diseases MGI curates the allele as a model of, with their MONDO IDs.</dd>
+        </dl>
+        <p>Alleles without coordinates, or whose consequence can't be scored, are not listed here; see Mouse Allele Coverage.</p>` : `
+        <p>Candidate human variants from ClinVar in the human ortholog. Coding variants are candidates when they make the
+           <strong>same amino-acid change</strong> (for example, any R&rarr;C); splice-site and intronic variants when they are
+           at the <strong>same intron offset</strong> (for example, +1). Whether a candidate is at the equivalent position is
+           tested in the Variant Equivalency Scoring table. Each candidate has one row per human transcript.</p>
+        <dl>
+            <dt>Name</dt><dd>The ClinVar variant name (HGVS).</dd>
+            <dt>Align</dt><dd>Opens a codon-by-codon alignment of this transcript with the mouse transcript around the variant, with Pfam domains marked.</dd>
+            <dt>Transcript ID, Exon / Intron</dt><dd>The human transcript and where the variant falls in it.</dd>
+            <dt>Amino Acid Change</dt><dd>The change on that transcript.</dd>
+            <dt>Associated Conditions</dt><dd>The variant's conditions in ClinVar, with their MONDO IDs.</dd>
+        </dl>`,
+
+    scoring: (org) => {
+        const human = org === 'human';
+        return `
+            <p>Each row compares the submitted ${human ? 'human' : 'mouse'} variant with one ${human ? 'mouse allele' : 'human ClinVar variant'}
+               on one ${human ? 'mouse' : 'human'} transcript. The tier measures how closely the two variants make the same
+               molecular change; it compares annotations and does not predict pathogenicity.</p>
+
+            <h4>Columns</h4>
+            <dl>
+                <dt>${human ? 'Allele Symbol' : 'Name'}</dt>
+                <dd>The ${human ? 'mouse allele (linked to MGI)' : 'human ClinVar variant'} being compared. Its rows are grouped together.</dd>
+                <dt>Transcript ID</dt>
+                <dd>The ${human ? 'mouse' : 'human'} transcript the comparison is made on. A variant is compared on every transcript it falls in.</dd>
+                <dt>Query Transcript ID</dt>
+                <dd>The transcript of the submitted variant (shown only when it falls in more than one).</dd>
+                <dt>Scoring Class</dt>
+                <dd><b>Coding</b> (missense, stop gained, frameshift and similar) or <b>Splice/Intronic</b>. Each class has its own criteria.</dd>
+                <dt>Equivalency Tier (1–5)</dt>
+                <dd>Tier 1 is the most equivalent. The line under the tier says what it rests on. Transcripts marked
+                    &ldquo;not protein-coding&rdquo; (for example, nonsense-mediated decay) are shown but don't set the ${human ? 'allele' : 'variant'}'s rank.</dd>
+                <dt>Match columns</dt>
+                <dd><code>true</code> or <code>false</code> for each criterion, the evidence behind the tier. N/A means the criterion
+                    does not apply or neither variant has a value. Columns that apply to no row are hidden.
+                    <ul>
+                        <li><b>Biotype Match</b>: both transcripts have the same biotype.</li>
+                        <li><b>Consequence Match</b>: the variants share a main VEP consequence.</li>
+                        <li><b>AA Match</b>: the same reference and variant amino acids.</li>
+                        <li><b>AA Position Match</b>: the residues align in a protein alignment of the two transcripts.</li>
+                        <li><b>Domain Match</b>: both residues are in Pfam domains of the same Pfam clan.</li>
+                        <li><b>Intron Match</b>: the introns split the coding sequence at the same aligned residue and codon phase.</li>
+                        <li><b>Intron Offset Match</b>: the same distance from the exon boundary (for example, +1).</li>
+                    </ul></dd>
+                <dt>Aligned Position</dt>
+                <dd>The residue that aligns with the submitted variant's residue. Click it to see all of the gene's transcripts aligned.</dd>
+                <dt>Local Alignment Identity</dt>
+                <dd>The fraction of the 10 residues on each side that align to identical residues. Below 0.3 the aligned position is uncertain.</dd>
+                ${human ? `<dt>Disease Match</dt>
+                <dd><code>true</code> when the allele models at least one of the human variant's conditions (same MONDO ID). Shown beside the tier, not part of it.</dd>` : ''}
+            </dl>
+
+            <h4>Tiers</h4>
+            <table class="infoTiers">
+                <thead><tr><th>Tier</th><th>Coding</th><th>Splice/Intronic</th></tr></thead>
+                <tbody>
+                    <tr><td>1</td><td><b>Identical change</b> at the aligned residue, where the proteins align well around it (names the Pfam domain, if any)</td><td><b>Same splice site and offset</b></td></tr>
+                    <tr><td>2</td><td><b>Same residue</b>, a different change; an identical change where the alignment is uncertain; or two truncating variants within 10 residues</td><td><b>Same splice site</b>, a different offset on the same side of the intron</td></tr>
+                    <tr><td>3</td><td><b>Same domain</b>: same consequence, in Pfam domains of the same clan</td><td><b>Same intron</b>, deeper in the intron</td></tr>
+                    <tr><td>4</td><td><b>Same consequence</b>, elsewhere in the protein</td><td><b>Different intron</b></td></tr>
+                    <tr><td>5</td><td><b>Different consequence</b></td><td><b>Different consequence</b></td></tr>
+                </tbody>
+            </table>
+            <p>${human ? 'Alleles' : 'Variants'} are ordered by their best tier on a protein-coding transcript${human ? ', then by Disease Match' : ''}.
+               See the <a href="/help#4-how-variant-equivalence-is-scored" target="_blank">User Guide</a> for details.</p>`;
+    },
+
+    phenotypeSimilarity: () => `
+        <p>One row per evaluated mouse allele, in the same order as the Variant Equivalency Scoring table. It shows how
+           closely the allele's MGI phenotypes match the human phenotypes.</p>
+        <dl>
+            <dt>Mouse Allele</dt><dd>The MGI allele, linked to MGI.</dd>
+            <dt>Matched Disease(s)</dt><dd>The human disease whose phenotypes best match the allele. Ties are all listed, separated by semicolons.</dd>
+            <dt>MP Terms Mapped to HPO</dt><dd>How many of the allele's scored mouse (MP) terms have a translation to human (HPO) terms. A low ratio means much of the mouse phenotype can't be compared.</dd>
+            <dt>Variant Phenotype Score</dt><dd>Similarity, from 0 to 1, to the phenotypes of the human variant's own disease(s).</dd>
+            <dt>Gene Phenotype Score</dt><dd>Similarity, from 0 to 1, to every HPO term annotated to the human gene.</dd>
+            <dt>Phenotype term mapping</dt><dd>Opens the term-by-term breakdown behind a score: how each MP term translates to HPO, its closest human term, their similarity and the arithmetic.</dd>
+        </dl>
+        <p>The score is how much of the allele's phenotype the human terms account for: each translated term is matched to its
+           closest human term (1 for the identical term, less for a broader, narrower or related term), weighted by how exact
+           the MP&rarr;HPO translation is. A dash (&mdash;) means the allele has no translatable phenotypes, not a score of zero.</p>`,
+
+    coverage: (org) => `
+        <p>Every MGI allele of ${org === 'human' ? 'the mouse ortholog' : 'the submitted gene'}, and whether VarLift could evaluate it.
+           This shows how much of the gene's mouse allele collection the results cover.${org === 'mouse'
+           ? ' Alleles at the submitted position are marked; alleles of other markers at the position (such as gene clusters) are included too.' : ''}</p>
+        <dl>
+            <dt>AlleleSymbol, AlleleID</dt><dd>The MGI allele, linked to MGI.</dd>
+            <dt>Consequence</dt><dd>The allele's VEP consequence, when it has coordinates.</dd>
+            <dt>Human Diseases Modeled</dt><dd>The diseases MGI curates the allele as a model of. &ldquo;No disease association&rdquo; alleles are still scored.</dd>
+            <dt>Evaluated</dt><dd><code>true</code> if VarLift scored the allele. Click <code>false</code> to see why not: usually the allele has no genomic coordinates in MGI (many knockouts, gene traps and transgenes), or its consequence can't be scored (for example, a 5&prime; UTR change).</dd>
+            <dt>Phenotypes</dt><dd>Click to list the allele's MGI phenotypes. &ldquo;Normal&rdquo; annotations are counted separately.</dd>
+        </dl>
+        <p>Evaluated alleles are listed first.</p>`,
+
+    humanPhenotypes: () => `
+        <p>Human Phenotype Ontology (HPO) terms that ClinVar lists for each candidate human variant in the Human Variants Evaluated table.
+           Many ClinVar records name only a disease, so some candidates have no rows here.</p>
+        <dl>
+            <dt>Name</dt><dd>The ClinVar variant name.</dd>
+            <dt>Phenotypes</dt><dd>The HPO terms, each with its ID.</dd>
+        </dl>
+        <p>These are shown for comparison with the submitted mouse variant's phenotypes; no phenotype similarity score is
+           calculated for mouse queries.</p>`,
+
+    unevaluated: (org) => `
+        <p>The submitted variant has no coding, splice-site or intronic consequence (for example, it is in a UTR, a non-coding
+           transcript or between genes), so it can't be compared with ${org === 'human' ? 'mouse alleles' : 'human variants'} and is not scored.</p>
+        <dl>
+            <dt>Gene Symbol, ${org === 'human' ? 'Mouse' : 'Human'} Homolog</dt><dd>The gene the variant is in, if any, and its ortholog.</dd>
+            <dt>Consequence, Transcript, Exon / Intron</dt><dd>What VEP reports for the variant.</dd>
+            <dt>Reason</dt><dd>Why the variant was not evaluated.</dd>
+            ${org === 'human'
+                ? '<dt>Associated Conditions</dt><dd>The variant\'s conditions in ClinVar, with their MONDO IDs.</dd>'
+                : '<dt>AlleleID, AlleleSymbol, Associated Diseases</dt><dd>MGI alleles at exactly this position and change, and the diseases they model.</dd>'}
+        </dl>`,
+
+    unevaluatedPhenotypes: () => `
+        <p>MGI phenotypes of the alleles at the submitted position, for alleles not already listed in the Mouse Allele Coverage table.</p>
+        <dl>
+            <dt>Phenotypes</dt><dd>The allele's Mammalian Phenotype (MP) annotations.</dd>
+            <dt>Normal Phenotypes</dt><dd>Annotations recording that a phenotype was examined and found normal.</dd>
+        </dl>`,
+};
+
+
+// The label entered with a submitted variant, as its first field (display only)
+function withLabel(name, fields) {
+    const label = (window.fullJSON.labels || {})[name];
+    return label ? {'Label': escapeText(label), ...fields} : fields;
+}
+
+
 function variantFields(row) {
     const out = {...row};
 
     if (row['AlleleID'] && row['AlleleSymbol']) {
-        out['AlleleSymbol'] = `${row['AlleleSymbol']} (${formatCell(row, 'AlleleID')})`;
+        // Several alleles at the position: each symbol is followed by its own linked MGI ID
+        // (the server joins both lists in the same order)
+        const ids = String(row['AlleleID']).split(', ');
+        const symbols = String(row['AlleleSymbol']).split(', ');
+        out['AlleleSymbol'] = ids.length === symbols.length
+            ? symbols.map((symbol, i) => `${symbol} (${formatCell({AlleleID: ids[i]}, 'AlleleID')})`).join(', ')
+            : `${row['AlleleSymbol']} (${formatCell(row, 'AlleleID')})`;
         delete out['AlleleID'];
     }
 
@@ -1438,8 +1687,8 @@ function formatCell(row, col, tableId, org) {
 
     // The tier with what it rests on; NMD and non-coding transcripts don't set the allele's tier
     if (col === 'Equivalency Tier' && tableId === 'scoresTable' && value !== null && value !== '') {
-        value = `<span class="tierValue">${value}</span> ${escapeText(row['Tier Basis'] || '')}`
-            + (row['Counts Toward Tier'] === false ? '<br><span class="tierNote">not protein-coding; not used for the allele\'s tier</span>' : '');
+        value = `<div class="tierValue">Tier ${value}</div><div class="tierBasis">${escapeText(row['Tier Basis'] || '')}</div>`
+            + (row['Counts Toward Tier'] === false ? '<div class="tierNote">not protein-coding; not used for the allele\'s tier</div>' : '');
     }
 
     // Criteria that don't apply to the variant's scoring class
@@ -1461,17 +1710,65 @@ function formatCell(row, col, tableId, org) {
 
 
 // Download full JSON for all data
+// File name from the time the results were produced, e.g. VarLift_results_2026-11-13_0915.json
+function resultsFileName(data) {
+    const t = data.run_at ? new Date(data.run_at) : new Date();
+    const pad = n => String(n).padStart(2, '0');
+    return `VarLift_results_${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}.json`;
+}
+
 document.getElementById('downloadJSON').addEventListener('click', function () {
     if (!window.fullJSON) {
         alert('No results yet.');
         return;
     }
 
-    const dataStr = 'data:text/json;charset=utf-8,' +
-        encodeURIComponent(JSON.stringify(window.fullJSON, null, 2));
-
+    const blob = new Blob([JSON.stringify(window.fullJSON, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.setAttribute('href', dataStr);
-    a.setAttribute('download', 'variant_mapping_results.json');
+    a.href = url;
+    a.download = resultsFileName(window.fullJSON);
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+
+// Load Results reopens a file saved with Download All Results in the results viewer
+document.getElementById('loadJSON').addEventListener('click', function () {
+    document.getElementById('loadJSONFile').click();
+});
+
+document.getElementById('loadJSONFile').addEventListener('change', async function () {
+    const file = this.files[0];
+    this.value = '';   // choosing the same file again still triggers a load
+    if (!file) return;
+
+    showError('');
+    let data;
+    try {
+        data = JSON.parse(await file.text());
+    } catch (err) {
+        showError(`${file.name} could not be read as VarLift results (it is not valid JSON).`);
+        return;
+    }
+    if (!data || !Array.isArray(data.query_variants) || !Array.isArray(data.scores)) {
+        showError(`${file.name} is not a VarLift results file. Use a file saved with Download All Results.`);
+        return;
+    }
+
+    // Files saved before the organism was recorded: human queries score mouse alleles (AlleleID)
+    const organism = data.organism
+        || (data.scores.some(row => 'AlleleID' in row) || (data.phenotype_similarity || []).length > 0 ? 'human' : 'mouse');
+    document.getElementById('queryOrganism').value = organism;
+    if (typeof data.input === 'string') document.getElementById('variantInput').value = data.input;
+
+    window.fullJSON = data;
+    try {
+        buildSidebar(data);
+    } catch (err) {
+        console.error(err);
+        window.fullJSON = undefined;
+        document.getElementById('resultsPanel').hidden = true;
+        showError(`${file.name} could not be displayed (${err.message}).`);
+    }
 });

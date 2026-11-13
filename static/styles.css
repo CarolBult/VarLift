@@ -1108,12 +1108,166 @@ pre.alignText {
     font-size: 11px;
 }
 
-/* Equivalency tier in the scoring table: the number, then what it rests on */
+/* Equivalency tier in the scoring table: the tier, then what it rests on */
 .tierValue {
     font-weight: 600;
+    white-space: nowrap;
+}
+
+.tierBasis {
+    margin-top: 2px;
+    min-width: 13em;
 }
 
 .tierNote {
     font-size: 12px;
     color: #5f6b7a;
+}
+
+/* Label entered with a submitted variant */
+.variantLabel {
+    color: #5f6b7a;
+    font-size: 0.9em;
+    margin-left: 4px;
+}
+
+.sidebar-button.active .variantLabel {
+    color: inherit;
+    opacity: 0.8;
+}
+
+/* Wraps to the width the rest of the input box sets, instead of widening it */
+.searchContainer .wrapToBox {
+    width: 0;
+    min-width: 100%;
+}
+
+/* Information button beside a section heading, and the window it opens */
+.infoButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-left: 6px;
+    padding: 0;
+    border: 1.5px solid #587da1;
+    border-radius: 50%;
+    background: #fff;
+    color: #587da1;
+    font: italic 700 13px Georgia, serif;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.infoButton:hover,
+.infoButton:focus-visible {
+    background: #587da1;
+    color: #fff;
+}
+
+.infoDialog {
+    width: min(760px, calc(100vw - 32px));
+    max-height: 85vh;
+    padding: 0;
+    border: 2px solid #587da1;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.infoDialog::backdrop {
+    background: rgba(20, 30, 45, 0.4);
+}
+
+.infoDialogHeader {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #d3e2f1;
+    border-bottom: 1px solid #587da1;
+}
+
+.infoDialogHeader h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.infoClose {
+    border: none;
+    background: none;
+    font-size: 24px;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+    color: #333;
+}
+
+.infoDialogBody {
+    padding: 4px 16px 12px;
+}
+
+.infoDialogBody h4 {
+    margin: 14px 0 6px;
+}
+
+.infoDialogBody dt {
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.infoDialogBody dd {
+    margin: 2px 0 0 16px;
+}
+
+.infoDialogBody ul {
+    margin: 4px 0;
+    padding-left: 18px;
+}
+
+.infoTiers {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.infoTiers th,
+.infoTiers td {
+    border: 1px solid #c5d2e0;
+    padding: 4px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.infoTiers th {
+    background: #eef3f9;
+}
+
+.infoTiers td:first-child {
+    text-align: center;
+    font-weight: 600;
+}
+
+/* Clear: a secondary button beside Submit */
+#clearButton {
+    margin-left: 8px;
+    background-color: #fff;
+    color: #587da1;
+    border: 1.5px solid #587da1;
+}
+
+#clearButton:hover {
+    background-color: #eef3f9;
+    color: #1C2A66;
+}
+
+/* Download and Load Results side by side */
+.resultsFileButtons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }

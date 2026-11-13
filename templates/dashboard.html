@@ -41,7 +41,7 @@
 
         <h2>Submit Variants:</h2>
 
-        <p class="instruction"> Input one variant per line, in the format: chromosome:start-end:ref/alt.</p>
+        <p class="instruction wrapToBox"> Input one variant per line, in the format: chromosome:start-end:ref/alt. To label a variant, add a tab and the label after it (for example, an allele symbol); the label is shown with the submitted variant and is not used in the analysis.</p>
 
         <div class="examples">
             <p class="instruction">Examples (click one to add it to the box; the organism is set to match):</p>
@@ -68,12 +68,17 @@
 
         <div>
             <button id="runButton">Submit</button>
+            <button type="button" id="clearButton" title="Remove all variants from the box">Clear</button>
         </div>
 
         <p id="errorMessage" class="errorMessage" role="alert" hidden></p>
 
         <div class="submitFooter">
-            <button id="downloadJSON">Download All Results</button>
+            <div class="resultsFileButtons">
+                <button id="downloadJSON" title="Save these results as a file that Load Results can reopen">Download All Results</button>
+                <button type="button" id="loadJSON" title="Reopen results saved with Download All Results">Load Results</button>
+                <input type="file" id="loadJSONFile" accept=".json,application/json" hidden>
+            </div>
             <a href="/help" target="_blank" class="guideLink">User Guide</a>
         </div>
 

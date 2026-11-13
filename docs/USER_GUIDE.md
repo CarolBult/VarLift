@@ -25,10 +25,11 @@ This guide explains how to submit variants, how each part of the results page is
 ![The Submit Variants panel](images/01-submit.png)
 
 1. **Examples.** Click an example to place it in the box. The organism menu switches to match it. ACVR1 R206H (the classic fibrodysplasia ossificans progressiva variant) is a good first query.
-2. **Variant box.** Enter one variant per line as `chromosome:start-end:ref/alt`, for example `2:157774114-157774114:C/T`. Use genomic coordinates on the forward strand. Omit the `chr` prefix.
+2. **Variant box.** Enter one variant per line as `chromosome:start-end:ref/alt`, for example `2:157774114-157774114:C/T`. Use genomic coordinates on the forward strand. Omit the `chr` prefix. To label a variant, add a tab (or spaces) and the label after it, for example `X:73079562-73079562:G/A<tab>Mecp2<tm5.1Bird>`. The label is shown beside the variant in the Variant Inputs list and as the first field of the Submitted Variant table; it is not used in the analysis. Variants entered more than once with different labels show all their labels, separated by semicolons.
 3. **Organism.** Choose **Human (GRCh38)** or **Mouse (GRCm39)**. Coordinates must be on that assembly. VarLift does not convert GRCh37 or GRCm38 coordinates.
-4. **Submit.** Starts the analysis.
-5. **Download All Results.** Saves every table for every submitted variant as one JSON file.
+4. **Submit.** Starts the analysis. **Clear** empties the variant box; results already on screen stay until the next submission.
+5. **Download All Results.** Saves every table for every submitted variant as one JSON file, together with the organism and the variants as entered. The file is named by when the results were produced, for example `VarLift_results_2026-11-13_0915.json`.
+6. **Load Results.** Reopens a file saved with Download All Results, so you can browse it exactly as when it ran. The organism and the variant box are set back to what was submitted. To keep one set of results while running another, download it first and load it again later, or run the new set in a second browser tab.
 
 While the query runs, a status panel shows **Assessing Variants…** and the elapsed time:
 
@@ -68,6 +69,8 @@ A single variant usually finishes in a few seconds to a minute. Genes with many 
 ---
 
 ## 3. Reading the results
+
+Every results table has an **i** button beside its heading. Click it for a short explanation of the table and its columns (for Variant Equivalency Scoring, also the tiers). Close it with the × button, the Escape key, or a click outside it.
 
 The screenshots below come from the human query **ACVR1 R206H** (`2:157774114-157774114:C/T`). For each variant, the page shows the sections in this order: Submitted Variant, Genes, Mouse Allele Coverage, Mouse Variants Evaluated, Variant Equivalency Scoring and Phenotype Similarity.
 
@@ -117,7 +120,7 @@ This section shows how many of the gene's mouse alleles VarLift could assess, an
 ![Variant Equivalency Scoring table](images/08-scoring.png)
 
 1. **Scoring Class.** Coding or Splice/Intronic. The class decides which criteria apply.
-2. **Equivalency Tier.** How equivalent the two variants are, from 1 (identical change) to 5 (different consequence), with what the tier rests on (Section 4). A transcript that is not protein-coding (for example, a nonsense-mediated decay transcript) is marked "not used for the allele's tier".
+2. **Equivalency Tier (1–5).** How equivalent the two variants are, from Tier 1 (identical change) to Tier 5 (different consequence). The tier is on the first line and what it rests on (for example, "Same domain") is on the line below (Section 4). A transcript that is not protein-coding (for example, a nonsense-mediated decay transcript) is marked "not used for the allele's tier".
 3. **Match columns.** `true` or `false` for each criterion, the evidence behind the tier. `null` (shown as N/A) means the criterion does not apply, or neither variant has a value for it.
 4. **Aligned Position.** The mouse residue that aligns with the human residue in a protein alignment. Here human R206 aligns with residue 176 on the shorter transcript, so **AA Position Match** is still `true`. Click it to see all the gene's transcripts aligned.
    **Local Alignment Identity** is the fraction of the 10 residues on each side that align to identical residues. Below 0.3, about what unrelated proteins give, the aligned position is uncertain.
@@ -332,6 +335,7 @@ How often the source resources themselves are released (approximate):
 
 - **Assemblies.** Human coordinates must be GRCh38 and mouse coordinates GRCm39.
 - **Variant types.** Only coding, splice-site and intronic variants are scored. Other variants are reported as not evaluated.
+- **Structural variants.** VarLift does not currently assess structural variants, such as large deletions, duplications, insertions, inversions, translocations or copy-number changes. The input must give the reference and alternate bases, so these cannot be submitted. Mouse alleles of these kinds are not scored either.
 - **Mouse alleles without coordinates.** Many knockouts, gene traps and transgenes have no genomic coordinates in MGI, so they cannot be scored. They still appear in the Mouse Allele Coverage table, where clicking "false" under Evaluated shows the reason.
 - **One-to-one orthologs.** Orthologs come from MGI's protein-coding homology report. Genes without a human–mouse ortholog there cannot be mapped.
 - **Disease Match uses exact MONDO IDs.** A mouse model of a closely related disease (a parent or child term in MONDO) does not count as a match.

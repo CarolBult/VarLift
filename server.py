@@ -113,7 +113,8 @@ def run_variants(data: VariantInput):
     except Exception:
         logging.exception('Analysis failed')
         message = (f'The analysis could not be completed. Please confirm that the Organism setting ({organism}) '
-                   f'matches your coordinates and that each line uses the format chromosome:start-end:ref/alt.')
+                   f'matches your coordinates and that each line uses the format chromosome:start-end:ref/alt, '
+                   f'optionally followed by a tab and a label.')
         return JSONResponse(status_code=500, content={'error': message})
 
 
@@ -125,8 +126,13 @@ def run_pipeline(data):
     variants = process_batch_query(data.variants)
 
     if variants.empty:
-        message = 'No variants were recognized. Enter one variant per line in the format chromosome:start-end:ref/alt.'
+        message = 'No variants were recognized. Enter one variant per line in the format chromosome:start-end:ref/alt, optionally followed by a tab and a label.'
         return JSONResponse(status_code=422, content={'error': message})
+
+    # Labels are only displayed with the submitted variants; the analysis never sees them
+    labels = (variants[variants['Label'] != ''].groupby('Name', sort=False)['Label']
+              .agg(lambda s: '; '.join(dict.fromkeys(s))).to_dict())
+    variants = variants.drop(columns='Label')
 
     import pandas as pd
     allele_coverage_df = pd.DataFrame()
@@ -171,6 +177,7 @@ def run_pipeline(data):
     hp_ids = {hp for table in results.values() for row in table for col, value in row.items()
               if col.startswith('HP_IDs') and isinstance(value, list) for hp in value}
     results['hp_names'] = hp_names(hp_ids)
+    results['labels'] = labels
 
     safe_result = jsonable_encoder(results)
 
