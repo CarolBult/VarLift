@@ -399,7 +399,8 @@ function renderTables(name, gene) {
     hideColumnsByName(scoreTable, [...scoreHiddenCols, ...notApplicable, ...singleQueryTranscript]);
 
     // Aligned Position buttons open the transcript overview beneath the row
-    initTranscriptOverview(scoreTable, org, queryProteins, sortedOutputProteins, sortedScores);
+    initTranscriptOverview(scoreTable, org, queryProteins, sortedOutputProteins, sortedScores,
+                           org === 'human' ? homolog : gene);
 
 
     // CREATE PHENOTYPE DATATABLE ELEMENT
@@ -679,7 +680,7 @@ function alignmentText(cols, data, q, t, colors) {
 // residues align to the query protein, a thin line where it lacks the query's residues,
 // ticks where it has residues the query lacks, and a mark at its own variant residue.
 
-function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, scores) {
+function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, scores, mouseGene) {
     const keyCol = org === 'human' ? 'AlleleID' : 'Name';
 
     $(dataTable.table().node()).find('tbody').on('click', 'button.overviewToggle', function () {
@@ -693,8 +694,8 @@ function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, s
         const { key, tx, qtx } = this.dataset;
 
         // The human transcript is the reference and the mouse transcripts compared with it
-        // are drawn beneath: for a human query, the allele's transcripts; for a mouse query,
-        // the submitted variant's transcripts
+        // are drawn beneath. They are transcripts of the mouse gene, each marked with where the
+        // allele's (human query) or submitted variant's (mouse query) change falls in it
         const human = org === 'human'
             ? { tx: qtx, variant: queryProteins.find(r => r['Transcript ID'] === qtx) }
             : { tx: tx, variant: outputProteins.find(r => String(r[keyCol]) === key && r['Transcript ID'] === tx) };
@@ -711,7 +712,7 @@ function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, s
         });
         const current = org === 'human' ? tx : qtx;
         const humanChange = human.variant ? human.variant['Amino Acids'] : null;
-        const label = org === 'human' ? (group[0] && group[0]['Allele Symbol']) || key : 'the submitted mouse variant';
+        const label = org === 'human' ? `the ${(group[0] && group[0]['Allele Symbol']) || key} variant` : 'the submitted mouse variant';
 
         row.child('<div class="txOverview"><p class="alignNote">Aligning transcripts…</p></div>').show();
         const view = $(row.child()).find('.txOverview');
@@ -727,7 +728,7 @@ function initTranscriptOverview(dataTable, org, queryProteins, outputProteins, s
             .then(response => response.json().then(body => ({ ok: response.ok, body })))
             .then(({ ok, body }) => {
                 if (!ok) throw new Error(body.error || 'The transcripts could not be aligned.');
-                view.html(overviewView(body, tracks, humanChange, label, current));
+                view.html(overviewView(body, tracks, humanChange, label, current, mouseGene));
             })
             .catch(error => view.html(`<p class="alignNote">${escapeText(error.message)}</p>`));
     });
@@ -737,7 +738,7 @@ function axisStep(length) {
     return length <= 200 ? 50 : length <= 600 ? 100 : length <= 1500 ? 250 : length <= 4000 ? 500 : 5000;
 }
 
-function overviewView(data, targets, qChange, alleleLabel, clickedTx) {
+function overviewView(data, targets, qChange, variantLabel, clickedTx, gene) {
     const q = SPECIES_LABEL[data.query.species], t = SPECIES_LABEL[data.target_species];
     const L = data.query.length;
     const pct = residue => `${(100 * (residue - 0.5) / L).toFixed(3)}%`;
@@ -795,11 +796,18 @@ function overviewView(data, targets, qChange, alleleLabel, clickedTx) {
     }).join('');
 
     const offCount = data.targets.filter(d => !d.error && d.residue && d.residue_at_query !== qResidue).length;
-    const summary = `${targets.length} ${t.toLowerCase()} ${targets.length === 1 ? 'transcript' : 'transcripts'} of ${alleleLabel}, `
-        + `aligned to ${q.toLowerCase()} ${escapeText(data.query.transcript)} and drawn on its residue numbering (1–${L}). `
+    // The tracks are the gene's transcripts (not the allele's); each shows where the one variant falls in it
+    const n = targets.length;
+    const geneName = gene ? `${t.toLowerCase()} <em>${escapeText(gene)}</em> gene` : `${t.toLowerCase()} gene`;
+    const one = n === 1;
+    const summary = `Alignment of ${n} ${one ? 'transcript' : 'transcripts'} of the ${geneName}, `
+        + `${one ? '' : 'each '}aligned to ${q.toLowerCase()} ${escapeText(data.query.transcript)} and drawn on its residue numbering (1–${L}). `
+        + `The mark on ${one ? 'the' : 'each'} transcript shows where ${variantLabel} falls in that transcript. `
+        + (targets.some(x => x.tx === clickedTx) ? 'The highlighted row is the transcript of the table row selected. ' : '')
         + (qResidue ? `The dashed line marks ${q.toLowerCase()} ${escapeText(qLabel)}. ` : '')
-        + (offCount ? `${offCount} ${offCount === 1 ? 'transcript has its' : 'transcripts have their'} variant residue somewhere else.`
-                    : 'Every transcript\'s variant residue lines up with it, whatever its own residue number.');
+        + (offCount ? `In ${offCount} ${offCount === 1 ? 'transcript' : 'transcripts'} the variant residue aligns somewhere else.`
+            : one ? 'In the transcript the variant residue aligns with it, whatever its residue number in that transcript.'
+                  : 'In every transcript the variant residue aligns with it, whatever its residue number in that transcript.');
 
     return `
         <p class="alignSummary">${summary}</p>
