@@ -15,18 +15,15 @@ ORGANISM_LABELS = {'human': 'Human (GRCh38)', 'mouse': 'Mouse (GRCm39)'}
 
 def sort_phenotypes_by_score(phenotype_df, score_df):
     '''
-    Reorder phenotype_df so alleles with the highest Total Score appear first.
-    Uses each allele's best (max) transcript score. Alleles with no score go to the bottom.
+    Reorder phenotype_df so the most equivalent alleles appear first: by each allele's
+    Best Tier, then by Disease Match. Alleles with no score go to the bottom.
     '''
-    if phenotype_df.empty or score_df.empty or 'AlleleID' not in phenotype_df.columns:
+    if phenotype_df.empty or score_df.empty or 'AlleleID' not in phenotype_df.columns or 'AlleleID' not in score_df.columns:
         return phenotype_df
 
-    allele_order = (
-        score_df.groupby('AlleleID')['Total Score']
-        .max()
-        .sort_values(ascending=False)
-        .index.tolist()
-    )
+    per_allele = score_df.assign(_disease=score_df['Disease Match'].eq(True)).groupby('AlleleID').agg(
+        tier=('Best Tier', 'min'), disease=('_disease', 'max'))
+    allele_order = per_allele.sort_values(['tier', 'disease'], ascending=[True, False], kind='stable').index.tolist()
     rank = {aid: i for i, aid in enumerate(allele_order)}
 
     phenotype_df = phenotype_df.copy()

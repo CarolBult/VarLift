@@ -102,3 +102,14 @@ logging:
   file: "app/mapping.log"
   level: "INFO"
   format: "%(asctime)s - %(levelname)s - %(message)s"
+
+scoring:
+  # Truncating variants (stop_gained, frameshift) whose stop codons are within this many residues
+  # of each other, through the protein alignment, rank as Tier 2 (nearby truncation)
+  truncation_window: 10
+  # An aligned residue is uncertain when fewer than this fraction of the residues within
+  # alignment_flank of the query residue align to identical residues (unrelated proteins
+  # average ~0.14; human-mouse orthologs are usually above 0.8). An identical change at an
+  # uncertain residue ranks as Tier 2 instead of Tier 1
+  alignment_flank: 10
+  min_local_identity: 0.3

@@ -109,3 +109,32 @@ def homologous_position(tx_a, species_a, tx_b, species_b, pos):
         mapped = _windowed_position(seq_a, seq_b, pos - 1)
 
     return None if mapped is None else mapped + 1
+
+
+def local_identity(tx_a, species_a, tx_b, species_b, pos, flank=10):
+    '''
+    Fraction of residues within flank of residue pos in tx_a's protein that align to an
+    identical residue in tx_b's protein (residues in a gap count as not identical). A low
+    value means the alignment around pos is weak, so the aligned position is uncertain.
+
+    Raises:
+        SequenceUnavailable: when either protein sequence is missing.
+    '''
+    seqs_a, seqs_b = _sequences(_species(species_a)), _sequences(_species(species_b))
+    seq_a = seqs_a.get(tx_a) if seqs_a else None
+    seq_b = seqs_b.get(tx_b) if seqs_b else None
+    if not seq_a or not seq_b or not 0 < pos <= len(seq_a):
+        raise SequenceUnavailable(f'{tx_a} or {tx_b}')
+
+    lo, hi = max(0, pos - 1 - flank), min(len(seq_a), pos + flank)
+    if len(seq_a) * len(seq_b) <= MAX_FULL_ALIGNMENT_CELLS:
+        alignment, offset = _full_alignment(seq_a, seq_b), 0
+    else:
+        offset = max(0, pos - 1 - WINDOW)
+        alignment = _local_aligner.align(seq_a[offset:pos + WINDOW], seq_b)[0]
+
+    identical = 0
+    for (a_start, a_end), (b_start, _) in zip(*alignment.aligned):
+        for i in range(max(a_start + offset, lo), min(a_end + offset, hi)):
+            identical += seq_a[i] == seq_b[b_start + i - offset - a_start]
+    return identical / (hi - lo)

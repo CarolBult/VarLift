@@ -117,12 +117,13 @@ This section shows how many of the gene's mouse alleles VarLift could assess, an
 ![Variant Equivalency Scoring table](images/08-scoring.png)
 
 1. **Scoring Class.** Coding or Splice/Intronic. The class decides which criteria apply.
-2. **Match columns.** `true` or `false` for each criterion. `null` means the criterion does not apply, or neither variant has a value for it. Null criteria are left out of the Total Score.
-3. **Aligned Position.** The mouse residue that aligns with the human residue in a protein alignment. Here human R206 aligns with residue 176 on the shorter transcript, so **AA Position Match** is still `true`.
-4. **Disease Match** (human queries only). `true` when the allele models at least one of the human variant's diseases (same MONDO ID).
-5. **Total Score.** The percentage of applicable criteria that match (Section 4).
+2. **Equivalency Tier.** How equivalent the two variants are, from 1 (identical change) to 5 (different consequence), with what the tier rests on (Section 4). A transcript that is not protein-coding (for example, a nonsense-mediated decay transcript) is marked "not used for the allele's tier".
+3. **Match columns.** `true` or `false` for each criterion, the evidence behind the tier. `null` (shown as N/A) means the criterion does not apply, or neither variant has a value for it.
+4. **Aligned Position.** The mouse residue that aligns with the human residue in a protein alignment. Here human R206 aligns with residue 176 on the shorter transcript, so **AA Position Match** is still `true`. Click it to see all the gene's transcripts aligned.
+   **Local Alignment Identity** is the fraction of the 10 residues on each side that align to identical residues. Below 0.3, about what unrelated proteins give, the aligned position is uncertain.
+5. **Disease Match** (human queries only). `true` when the allele models at least one of the human variant's conditions (same MONDO ID). It is shown beside the tier, not combined with it.
 
-Rows are grouped by allele. Alleles are ordered by their best-scoring transcript, and transcripts within an allele are ordered by Total Score. The Phenotype Similarity table lists alleles in the same order.
+Rows are grouped by allele. Alleles are ordered by their best tier on a protein-coding transcript, then by Disease Match; transcripts within an allele are ordered by tier. The Phenotype Similarity table lists alleles in the same order.
 
 ### Phenotype Similarity (human queries)
 
@@ -159,15 +160,15 @@ The example below is a Pax6 splice-donor variant (`2:105522966-105522966:G/T`). 
 ![Scoring a mouse splice-site variant](images/11-mouse-query-scoring.png)
 
 1. **Scoring Class** is Splice/Intronic, so the coding criteria are not shown.
-2. **Intron Match** is `false`: the human variants lie in a different-numbered intron from the mouse variant.
-3. **Intron Offset Match** is `true`: every candidate is at the same position relative to the exon (`+1`, the first intronic base).
-4. **Total Score** is 75: three of the four applicable criteria match.
+2. **Intron Match** is `true` for c.958+1: the mouse variant is in intron 9 of its transcript and the human variant in intron 11 of the human transcript, but both introns split the coding sequence at the same aligned residue, so they are the same intron.
+3. **Intron Offset Match** is `true`: the candidates are at the same position relative to the exon (`+1`, the first intronic base).
+4. **Equivalency Tier** is 1 (same splice site and offset) for the c.958+1 variants and 4 (different intron) for +1 variants in other introns.
 
 ---
 
 ## 4. How variant equivalence is scored
 
-The equivalence score measures **how closely two variants make the same molecular change**. It compares annotations; it does not predict pathogenicity.
+The equivalency tier measures **how closely two variants make the same molecular change**. It compares annotations; it does not predict pathogenicity.
 
 ### Scoring classes
 
@@ -176,34 +177,48 @@ A variant's VEP consequence puts it in one of two classes. Each class has its ow
 | Criterion | Coding | Splice/Intronic | Matches when… |
 |---|:-:|:-:|---|
 | Biotype Match | ✓ | ✓ | both transcripts have the same biotype (for example, protein_coding) |
-| Consequence Match | ✓ | ✓ | both variants have the same VEP consequence |
+| Consequence Match | ✓ | ✓ | the variants share a main VEP consequence term. Modifiers such as NMD_transcript_variant are ignored |
 | AA Match | ✓ | | the reference and variant amino acids are the same (for example, R/H and R/H) |
 | AA Position Match | ✓ | | the residues are at equivalent positions in a protein alignment of the two transcripts |
-| Exon Match | ✓ | | both are in the same-numbered exon (for example, 6/11) |
-| Domain Match | ✓ | | both are in the same Pfam domain |
-| Intron Match | | ✓ | both are in the same-numbered intron |
+| Domain Match | ✓ | | the residues are in Pfam domains of the same Pfam clan (any domain at the residue, not only the first). Families outside a clan must be the same family |
+| Intron Match | | ✓ | the introns are equivalent: they split the coding sequence at the same aligned residue, with the same codon phase. Introns outside the coding sequence are compared by number |
 | Intron Offset Match | | ✓ | both are the same distance from the exon boundary (HGVS style, for example +1 or −2) |
-| Disease Match | ✓ | ✓ | the mouse allele models at least one of the human variant's diseases (human queries only) |
+| Disease Match | ✓ | ✓ | the mouse allele models at least one of the human variant's conditions (human queries only). Shown beside the tier, not part of it |
 
 - **Coding** consequences include missense, synonymous, stop gained or lost, start lost, frameshift, and in-frame insertions and deletions.
 - **Splice/Intronic** consequences include splice donor and acceptor, splice region, and intron variants.
 - Other consequences (UTR, non-coding transcript, intergenic) are **not evaluated**.
+- **Exon number is not compared.** Exon numbering differs between orthologs and isoforms, and for a coding variant the aligned residue already shows whether the variants are in the same place.
 
-### Total Score
+### Equivalency Tier
 
-**Total Score = matching criteria ÷ applicable criteria × 100**
+Each variant pair is placed in a tier according to what it shares, so a tier means the same thing for every gene and query. Missing information cannot raise a tier.
 
-A criterion is left out (shown as `null`) when it does not belong to the variant's class, or when neither variant has a value for it. For example, Domain Match is left out when neither variant is in a Pfam domain, and Disease Match is left out when the mouse allele has no disease model. A missing value therefore never counts against a score. A score of 100 means every applicable criterion matched.
+| Tier | Coding | Splice/Intronic |
+|:-:|---|---|
+| 1 | **Identical change**: the same amino-acid change at the aligned residue, where the proteins align well around it. The label names the Pfam domain the change is in, if any | **Same splice site and offset**: equivalent intron, same offset |
+| 2 | **Same residue**: the aligned residue, a different change. Also an identical change where the alignment around the residue is uncertain, and two truncating variants (stop gained or frameshift) within 10 residues of each other in the alignment | **Same splice site**: equivalent intron, both splice-site or splice-region variants on the same side of the intron |
+| 3 | **Same domain**: the same consequence, in Pfam domains of the same clan | **Same intron**: equivalent intron, deeper in the intron |
+| 4 | **Same consequence**: elsewhere in the protein | **Different intron** |
+| 5 | **Different consequence** | **Different consequence** |
+
+A domain is not required for Tier 1: many disease variants lie outside Pfam domains, and an identical change at a well-aligned residue is equally equivalent there. Instead, Tier 1 requires the alignment around the residue to be reliable: at least 30% of the 10 residues on each side must align to identical residues (human–mouse orthologs are usually above 80%; unrelated proteins average about 14%). Otherwise the label reads "alignment uncertain" and the pair is Tier 2.
+
+The truncation window (10 residues) and the alignment check (`alignment_flank`, `min_local_identity`) are set in `app/config.yaml` under `scoring`. The truncation window treats a stop a few codons from the human one, which leaves almost the same truncated protein, as more equivalent than a stop elsewhere.
+
+An allele is scored on every mouse transcript it falls in. Its overall rank (Best Tier) comes from its protein-coding transcripts; nonsense-mediated decay and other non-coding transcripts are still shown, but don't set it.
+
+The earlier **Total Score** (the percentage of applicable criteria that match) is still included in the downloaded results, but is no longer shown or used for ordering: the number of applicable criteria changed from row to row, so equal percentages did not mean equal evidence.
 
 ### Aligned positions
 
-Residue numbers are not directly comparable between orthologs or isoforms: one protein may have extra residues before the variant (as with the ACVR1 example in Section 3, where human R206 corresponds to residue 176 on one mouse transcript). VarLift therefore aligns the two protein sequences (global alignment, BLOSUM62) and checks whether the mouse residue is the one aligned to the human residue. Very long proteins (for example, titin) are aligned in a window around the variant.
+Residue numbers are not directly comparable between orthologs or isoforms: one protein may have extra residues before the variant (as with the ACVR1 example in Section 3, where human R206 corresponds to residue 176 on one mouse transcript). VarLift therefore aligns the two protein sequences (global alignment, BLOSUM62) and checks whether the mouse residue is the one aligned to the human residue. Very long proteins (for example, titin) are aligned in a window around the variant. The same alignment places introns: an intron is identified by the residue where it splits the coding sequence.
 
-### What the score does not do
+### What the tier does not do
 
 - **Null alleles are not treated as matches for loss-of-function variants.** A knockout or null allele is not assumed to be equivalent to a human stop-gain or frameshift, because a null allele does not always produce the same loss of function.
 - **PolyPhen is not used.** It is shown for reference only.
-- The score is a percentage of criteria, not a probability. Compare scores within a query; do not read them as a measure of clinical confidence.
+- The tier describes how alike the two molecular changes are. It is not a probability, and not a measure of clinical confidence.
 
 ---
 

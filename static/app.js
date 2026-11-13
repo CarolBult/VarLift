@@ -117,28 +117,21 @@ function showError(message) {
 
 
 
-// Sort score rows so each allele's transcripts stay together
+// Sort score rows so each allele's transcripts stay together. Alleles (ClinVar variants
+// on mouse queries) are ordered by their Best Tier, then by Disease Match; within an
+// allele, transcripts by their own tier, protein-coding transcripts first.
 function groupedScoreSort(scores) {
-    // Each allele's best transcript score decides where the group lands;
-    // within an allele, transcripts sort by their own Total Score.
-    const bestByAllele = {};
-    scores.forEach(row => {
-        const aid = row['AlleleID'];
-        const s = row['Total Score'] ?? 0;
-        if (bestByAllele[aid] === undefined || s > bestByAllele[aid]) {
-            bestByAllele[aid] = s;
-        }
-    });
+    const key = row => String(row['AlleleID'] ?? row['Name'] ?? '');
+    const tier = value => (value === null || value === undefined) ? 99 : Number(value);
+    const disease = {};
+    scores.forEach(row => { if (row['Disease Match'] === true) disease[key(row)] = true; });
 
-    return [...scores].sort((a, b) => {
-        const aBest = bestByAllele[a['AlleleID']] ?? 0;
-        const bBest = bestByAllele[b['AlleleID']] ?? 0;
-        if (bBest !== aBest) return bBest - aBest;              // allele groups by best score
-        if (a['AlleleID'] !== b['AlleleID']) {
-            return String(a['AlleleID']).localeCompare(b['AlleleID']);  // stable tiebreak between alleles
-        }
-        return (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0);  // within an allele
-    });
+    return [...scores].sort((a, b) =>
+        tier(a['Best Tier']) - tier(b['Best Tier'])
+        || (disease[key(b)] ? 1 : 0) - (disease[key(a)] ? 1 : 0)
+        || key(a).localeCompare(key(b))
+        || tier(a['Equivalency Tier']) - tier(b['Equivalency Tier'])
+        || (b['Counts Toward Tier'] ? 1 : 0) - (a['Counts Toward Tier'] ? 1 : 0));
 }
 
 
@@ -385,8 +378,11 @@ function renderTables(name, gene) {
     // Columns that are be hidden by default
     // AlleleID is linked from the Allele Symbol instead. Phenotype similarity has its own
     // table below (one row per allele); its columns stay in the JSON download
+    // The tier's basis is shown in the tier cell. Total Score is superseded by the tier and
+    // stays in the download only
     const scoreHiddenCols = ['Input Name', 'AlleleID', 'Matched Disease(s)', 'Phenotype Score (variant)',
-                             'Phenotype Score (gene)', 'MP Terms Mapped', 'MP Terms Total'];
+                             'Phenotype Score (gene)', 'MP Terms Mapped', 'MP Terms Total',
+                             'Tier Basis', 'Counts Toward Tier', 'Best Tier', 'Total Score'];
 
     // Criteria that don't apply to any row, such as the coding criteria for a splice-site variant
     const notApplicable = Object.keys(sortedScores[0] || {})
@@ -514,11 +510,11 @@ function initAlignmentToggles(dataTable, org, queryProteins, scores) {
         }
         this.setAttribute('aria-expanded', 'true');
 
-        // Query transcripts this row was scored against, best score first
+        // Query transcripts this row was scored against, best tier first
         const { key, tx, residue } = this.dataset;
         const pairs = scores
             .filter(s => String(s[keyCol]) === key && s['Transcript ID'] === tx && s['Query Transcript ID'])
-            .sort((a, b) => (b['Total Score'] ?? 0) - (a['Total Score'] ?? 0));
+            .sort((a, b) => (a['Equivalency Tier'] ?? 99) - (b['Equivalency Tier'] ?? 99));
         const queryTxs = [...new Set(pairs.map(s => s['Query Transcript ID']))];
         if (queryTxs.length === 0) {
             row.child('<div class="alignmentView"><p class="alignNote">No scored query transcript to align with.</p></div>').show();
@@ -788,7 +784,7 @@ function overviewView(data, targets, qChange, variantLabel, clickedTx, gene) {
         } else if (d.residue) {
             note = ' · variant residue has no counterpart';
         }
-        const total = score['Total Score'] !== null && score['Total Score'] !== undefined ? ` · score ${score['Total Score']}` : '';
+        const total = score['Equivalency Tier'] !== null && score['Equivalency Tier'] !== undefined ? ` · tier ${score['Equivalency Tier']}` : '';
         const details = `${d.length} aa${aminoAcids ? ` · ${escapeText(aminoAcids)}` : ''}${note}${total}`;
         return `<div class="ovRow${current}">
             <div class="ovLabel"><strong>${txLabel}</strong><span>${details}</span></div>
@@ -1433,6 +1429,17 @@ function formatCell(row, col, tableId, org) {
         value = `<button type="button" class="overviewToggle" aria-expanded="false" title="Compare all transcripts"
             data-key="${escapeText(String(key ?? ''))}" data-tx="${escapeText(row['Transcript ID'] || '')}"
             data-qtx="${escapeText(row['Query Transcript ID'])}">${value}</button>`;
+    }
+
+    // Local alignment identity applies only where the residues align
+    if (col === 'Local Alignment Identity' && tableId === 'scoresTable' && (value === null || value === '')) {
+        value = '';
+    }
+
+    // The tier with what it rests on; NMD and non-coding transcripts don't set the allele's tier
+    if (col === 'Equivalency Tier' && tableId === 'scoresTable' && value !== null && value !== '') {
+        value = `<span class="tierValue">${value}</span> ${escapeText(row['Tier Basis'] || '')}`
+            + (row['Counts Toward Tier'] === false ? '<br><span class="tierNote">not protein-coding; not used for the allele\'s tier</span>' : '');
     }
 
     // Criteria that don't apply to the variant's scoring class

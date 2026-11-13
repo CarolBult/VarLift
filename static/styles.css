@@ -1107,3 +1107,13 @@ pre.alignText {
 .alignmentView .alnDomain {
     font-size: 11px;
 }
+
+/* Equivalency tier in the scoring table: the number, then what it rests on */
+.tierValue {
+    font-weight: 600;
+}
+
+.tierNote {
+    font-size: 12px;
+    color: #5f6b7a;
+}

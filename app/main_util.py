@@ -2,7 +2,7 @@ from app.log_util import log_batch_query
 from app.processing_util import prepare_submission, process_human_fetch
 from app.gene_util import fetch_gene_info, fetch_mus_alleles, fetch_homologous_gene, process_mus_alleles
 from app.vep_util import prepare_vep_output, run_vep_scorable
-from app.variant_scoring import structural_matches, total_score, STRUCTURAL_COLS
+from app.variant_scoring import structural_matches, total_score, add_best_tier, STRUCTURAL_COLS
 from app.phenotype_util import allele_phenotype_match
 from app.disease_util import assign_clinvar, fetch_mus_doid, clndisdb_to_mondo, map_doids_to_mondo, extract_hp_ids
 
@@ -368,8 +368,10 @@ def hvar_query_score(hum_prt_df, mouse_prt_df, gene_inputs, mouse_phenotype_df=N
     # columns which can be attributed to score
     match_cols = STRUCTURAL_COLS + ['Disease Match']
 
-    # Percent of the criteria that apply to the variant's class
+    # Percent of the criteria that apply to the variant's class. Superseded by the
+    # Equivalency Tier; kept (hidden in the table) for the download and clinvar_batch
     score_df['Total Score'] = total_score(score_df, match_cols)
+    score_df = add_best_tier(score_df, 'AlleleID')
 
 
     score_df = score_df.where(pd.notnull(score_df), None)
@@ -717,8 +719,10 @@ def mvar_query_score(mouse_prt_df, hum_prt_df, gene_inputs):
     # columns which can be attributed to score
     match_cols = STRUCTURAL_COLS
 
-    # Percent of the criteria that apply to the variant's class
+    # Percent of the criteria that apply to the variant's class. Superseded by the
+    # Equivalency Tier; kept (hidden in the table) for the download
     score_df['Total Score'] = total_score(score_df, match_cols)
+    score_df = add_best_tier(score_df, 'Name')
 
 
     score_df = score_df.astype(object).where(pd.notnull(score_df), None)

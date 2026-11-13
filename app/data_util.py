@@ -150,6 +150,29 @@ def parse_ensembl_exons(gff3_path, species):
 
     exon_df = exon_df[['transcript_id', 'rank', 'start', 'end', 'strand', 'seqid', 'gene_id']].dropna(subset=['transcript_id'])
 
+    # Each exon's coding part as 1-based positions in the transcript's CDS (cds_start, cds_end),
+    # so an intron can be placed by where it splits the coding sequence. Used to match introns
+    # between human and mouse through the protein alignment rather than by intron number.
+    cds = gff_df[gff_df['type'] == 'CDS'][['start', 'end', 'strand', 'attributes']].copy()
+    del gff_df
+    cds['transcript_id'] = cds['attributes'].str.extract(r'Parent=transcript:([^;]+)', expand=False)
+    cds = cds.drop(columns='attributes').dropna(subset=['transcript_id'])
+    # Transcript order: ascending on the + strand, descending on the - strand
+    cds['_key'] = cds['start'].where(cds['strand'] == '+', -cds['start'])
+    cds = cds.sort_values(['transcript_id', '_key'])
+    length = cds['end'] - cds['start'] + 1
+    cds['cds_end'] = length.groupby(cds['transcript_id']).cumsum()
+    cds['cds_start'] = cds['cds_end'] - length + 1
+    # A CDS segment lies within one exon; segments run through consecutive exon ranks, so
+    # the first segment's exon fixes the rank of the rest
+    cds['_n'] = cds.groupby('transcript_id').cumcount()
+    first = cds[cds['_n'] == 0][['transcript_id', 'start', 'end']].merge(
+        exon_df[['transcript_id', 'rank', 'start', 'end']], on='transcript_id', suffixes=('', '_exon'))
+    first = first[(first['start_exon'] <= first['start']) & (first['end'] <= first['end_exon'])]
+    cds['rank'] = cds['transcript_id'].map(dict(zip(first['transcript_id'], first['rank']))) + cds['_n']
+    cds = cds.dropna(subset=['rank']).astype({'rank': int})
+    exon_df = exon_df.merge(cds[['transcript_id', 'rank', 'cds_start', 'cds_end']], on=['transcript_id', 'rank'], how='left')
+
     exon_df.to_parquet(config['paths'][f'{species}_exon_pqt'], index=False)
 
 
