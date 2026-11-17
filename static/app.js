@@ -335,6 +335,8 @@ function renderTables(name, gene) {
 
         ${org === 'human' ? '' : coverage}
 
+        ${org === 'human' ? '' : genePhenotypeSimilaritySection(name, gene, homolog)}
+
         ${org === 'human' ? '' : `
         <div class='tableWrapper'>
             ${infoHeading('phenotypesInfo', `${targetOrganism} Phenotypes`, INFO.humanPhenotypes())}
@@ -861,7 +863,7 @@ function overviewView(data, targets, qChange, variantLabel, clickedTx, gene, que
 
 
 // Mouse Allele Coverage table and its summary line
-// PHENOTYPE SIMILARITY (human queries)
+// PHENOTYPE SIMILARITY (human queries; mouse queries use genePhenotypeSimilaritySection)
 // One row per evaluated allele, in the order of the scoring table, with each phenotype
 // score and a button that opens the term mapping behind it in a row beneath the allele.
 
@@ -914,6 +916,45 @@ function phenotypeSimilaritySection(name, gene, sortedScores) {
                     <th>Matched Disease(s)</th>
                     <th>MP Terms Mapped to HPO</th>
                     <th>Variant Phenotype Score</th>
+                    <th>Gene Phenotype Score</th>
+                </tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>`;
+}
+
+// Mouse queries: the submitted mouse variant may be novel and match no MGI allele, so the
+// phenotypes of all the mouse gene's alleles are pooled into one set and compared with the
+// human homolog's HPO terms (one gene score per submitted variant)
+function genePhenotypeSimilaritySection(name, gene, homolog) {
+    const rows = phenotypeSimilarityRows(name);
+    if (rows.length === 0) return '';
+
+    const score = v => (v === null || v === undefined) ? '<span class="naScore">—</span>' : Number(v).toFixed(2);
+    const body = rows.map(row => `<tr>
+            <td>${escapeText(row['Mus Gene'] || gene)}, all alleles</td>
+            <td>${row['Alleles Pooled']} of ${row['Alleles Total']}</td>
+            <td>${row['MP Terms Mapped']} of ${row['MP Terms Total']}</td>
+            <td>${escapeText(row['Hum Gene'] || homolog)}<br><span class="alleleId">${row['Human HP Terms'] ? `${row['Human HP Terms']} HPO terms` : 'no HPO annotations'}</span></td>
+            <td class="scoreCell"><span class="scoreValue">${score(row['Phenotype Score (gene)'])}</span><button type="button" class="phenotypeToggle mappingToggle" data-allele="${escapeText(row['AlleleID'])}" data-kind="gene" aria-expanded="false">Phenotype term mapping</button></td>
+        </tr>`).join('');
+
+    return `
+        <div class='tableWrapper'>
+            ${infoHeading('similarityInfo', 'Gene Phenotype Similarity', INFO.genePhenotypeSimilarity())}
+            <p class="coverageSummary">How closely the mouse phenotypes of ${escapeText(gene)} match the human phenotypes
+            of ${escapeText(homolog)}. A submitted mouse variant may be novel and match no MGI allele, so it has no phenotypes
+            of its own; instead, the MGI phenotypes of all ${escapeText(gene)} alleles are pooled into one set and compared
+            with all HPO terms of ${escapeText(homolog)}.
+            Mouse (MP) terms are translated to human (HPO) terms, and each translated term is matched to its closest
+            human term by semantic similarity. The score, from 0 to 1, is how much of the pooled mouse phenotype the
+            human terms account for. Open <em>Phenotype term mapping</em> to see every term behind the score.</p>
+            <table id="phenotypeSimilarityTable" class="table.dataTable">
+                <thead><tr>
+                    <th>Mouse Phenotypes</th>
+                    <th>Alleles with Phenotypes</th>
+                    <th>MP Terms Mapped to HPO</th>
+                    <th>Human Gene</th>
                     <th>Gene Phenotype Score</th>
                 </tr></thead>
                 <tbody>${body}</tbody>
@@ -1478,6 +1519,23 @@ const INFO = {
             <p>${human ? 'Alleles' : 'Variants'} are ordered by their best tier on a protein-coding transcript${human ? ', then by Disease Match' : ''}.
                See the <a href="/help#4-how-variant-equivalence-is-scored" target="_blank">User Guide</a> for details.</p>`;
     },
+
+    genePhenotypeSimilarity: () => `
+        <p>A submitted mouse variant may be novel and match no MGI allele, so it has no phenotypes of its own. Phenotypes
+           are therefore compared at the gene level: the abnormal MGI phenotypes of every allele of the mouse gene are pooled
+           into one set (each term once) and compared with the human homolog.</p>
+        <dl>
+            <dt>Mouse Phenotypes</dt><dd>The pooled phenotypes of all the mouse gene's MGI alleles.</dd>
+            <dt>Alleles with Phenotypes</dt><dd>How many of the gene's MGI alleles have phenotype annotations, of all its alleles in the Mouse Allele Coverage table.</dd>
+            <dt>MP Terms Mapped to HPO</dt><dd>How many of the pooled, scored mouse (MP) terms have a translation to human (HPO) terms. A low ratio means much of the mouse phenotype can't be compared.</dd>
+            <dt>Human Gene</dt><dd>The human homolog whose HPO terms (all its annotated diseases) are the reference, with how many there are.</dd>
+            <dt>Gene Phenotype Score</dt><dd>Similarity, from 0 to 1, of the pooled mouse phenotypes to every HPO term annotated to the human homolog.</dd>
+            <dt>Phenotype term mapping</dt><dd>Opens the term-by-term breakdown behind the score: how each MP term translates to HPO, its closest human term, their similarity and the arithmetic.</dd>
+        </dl>
+        <p>Each translated term is matched to its closest human term (1 for the identical term, less for a broader, narrower
+           or related term), weighted by how exact the MP&rarr;HPO translation is. A term that is abnormal in any allele counts
+           as abnormal; normal (examined, no abnormality) annotations are not scored. A dash (&mdash;) means none of the
+           pooled phenotypes can be translated, or the human gene has no HPO annotations; it is not a score of zero.</p>`,
 
     phenotypeSimilarity: () => `
         <p>One row per evaluated mouse allele, in the same order as the Variant Equivalency Scoring table. It shows how

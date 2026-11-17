@@ -2,7 +2,7 @@
 
 VarLift asks one question about a genetic variant: **is there an equivalent variant in the other species, and how closely does it match?**
 
-Submit a human variant and VarLift finds the mouse alleles in the orthologous gene, scores how closely each one matches your variant at the sequence level, and scores how well each mouse model's phenotypes reproduce the human disease. Submit a mouse variant and VarLift finds human ClinVar variants that make the equivalent change in the orthologous human gene.
+Submit a human variant and VarLift finds the mouse alleles in the orthologous gene, scores how closely each one matches your variant at the sequence level, and scores how well each mouse model's phenotypes reproduce the human disease. Submit a mouse variant and VarLift finds human ClinVar variants that make the equivalent change in the orthologous human gene, and scores how well the mouse gene's known phenotypes, pooled across all its alleles, match the human gene's.
 
 This guide explains how to submit variants, how each part of the results page is built, how the scores are calculated, and where the underlying data come from.
 
@@ -43,6 +43,10 @@ A single variant usually finishes in a few seconds to a minute. Genes with many 
 
 ## 2. How a variant is analyzed
 
+![VarLift pipeline overview](images/pipeline-overview.svg)
+
+The figure shows both directions. The comparison variants differ (mouse alleles for a human query, candidate ClinVar variants for a mouse query), but every pair is scored the same way for variant equivalence. Phenotype similarity is scored per mouse allele for a human query, and once per gene for a mouse query. The tables below give the steps in detail.
+
 ### Human variant submitted
 
 | Step | What VarLift does | Data used |
@@ -64,7 +68,8 @@ A single variant usually finishes in a few seconds to a minute. Genes with many 
 | 2. Find the human ortholog | From MGI's homology report. |
 | 3. Find candidate human variants | Coding variants are matched to ClinVar variants in the human gene with the **same amino-acid change** (for example, any R→C). Splice-site and intronic variants are matched to ClinVar SNVs at the **same intron offset** (for example, `+1`). Whether each candidate is at the equivalent position is then tested during scoring. |
 | 4. Annotate and score | Each candidate human variant is annotated with VEP and scored for variant equivalence. |
-| 5. Report | The page also lists the MGI alleles at exactly the submitted position, with their disease models and phenotypes. |
+| 5. Score gene phenotypes | The MGI phenotypes of all the mouse gene's alleles are pooled into one set and scored against the HPO terms of the human gene (Section 5). The submitted variant may be novel and match no MGI allele, so it has no phenotypes of its own. |
+| 6. Report | The page also lists every MGI allele of the mouse gene in Mouse Allele Coverage, marking the alleles at exactly the submitted position, with their disease models and phenotypes. |
 
 ---
 
@@ -156,7 +161,7 @@ Rows shaded green have a similarity of 0.5 or more (darker for identical terms).
 
 ### Mouse queries
 
-For a submitted mouse variant, the page shows **Human Variants Evaluated** (the candidate ClinVar variants) and scores each one. Disease Match and Phenotype Similarity are not calculated. The page instead shows **Human Phenotypes** and the Mouse Allele Coverage of the submitted gene.
+For a submitted mouse variant, the page shows **Human Variants Evaluated** (the candidate ClinVar variants) and scores each one. Disease Match and the per-allele Phenotype Similarity are not calculated. The page instead shows the Mouse Allele Coverage of the submitted gene, **Gene Phenotype Similarity**, and **Human Phenotypes**.
 
 The example below is a Pax6 splice-donor variant (`2:105522966-105522966:G/T`). It shows the Splice/Intronic scoring class:
 
@@ -166,6 +171,18 @@ The example below is a Pax6 splice-donor variant (`2:105522966-105522966:G/T`). 
 2. **Intron Match** is `true` for c.958+1: the mouse variant is in intron 9 of its transcript and the human variant in intron 11 of the human transcript, but both introns split the coding sequence at the same aligned residue, so they are the same intron.
 3. **Intron Offset Match** is `true`: the candidates are at the same position relative to the exon (`+1`, the first intronic base).
 4. **Equivalency Tier** is 1 (same splice site and offset) for the c.958+1 variants and 4 (different intron) for +1 variants in other introns.
+
+#### Gene Phenotype Similarity (mouse queries)
+
+A submitted mouse variant may be novel, so it may match no MGI allele and have no phenotypes of its own. VarLift therefore compares phenotypes at the gene level: the MGI phenotypes of every allele of the mouse gene are pooled into one set and compared with all HPO terms of the human gene. The table has one row:
+
+1. **Mouse Phenotypes.** The pooled phenotypes of the mouse gene, for example "Mecp2, all alleles".
+2. **Alleles with Phenotypes.** How many of the gene's MGI alleles have phenotype annotations, of all its alleles in Mouse Allele Coverage (for Mecp2, 26 of 68).
+3. **MP Terms Mapped to HPO.** How many of the pooled, scored MP terms have a translation to HPO (for Mecp2, 65 of 150).
+4. **Human Gene.** The human gene whose HPO terms are the reference, with how many terms it has.
+5. **Gene Phenotype Score.** The similarity of the pooled mouse phenotypes to the human gene, from 0 to 1 (Mecp2 against MECP2: 0.68). **Phenotype term mapping** opens the term-by-term breakdown, as for human queries.
+
+A dash (—) means no score is possible: none of the pooled phenotypes can be translated, or the human gene has no HPO annotations (for example, ADAMTS20). The score describes the gene, not the submitted variant, and is the same for every variant in the gene.
 
 ---
 
@@ -229,7 +246,7 @@ Residue numbers are not directly comparable between orthologs or isoforms: one p
 
 ## 5. How phenotype similarity is scored
 
-The phenotype score measures **how much of a mouse allele's phenotype is explained by the human phenotypes**. It is calculated for human queries, separately for every evaluated mouse allele.
+The phenotype score measures **how much of a mouse allele's phenotype is explained by the human phenotypes**. For human queries it is calculated separately for every evaluated mouse allele. For mouse queries it is calculated once, for the pooled phenotypes of all the mouse gene's alleles (see [Pooled gene score](#pooled-gene-score-mouse-queries) below). The steps are the same in both cases.
 
 ### Step 1: Choose the mouse terms to score
 
@@ -272,6 +289,16 @@ The score runs from 0 to 1. It is **asymmetric**: it asks how much of the mouse 
 
 - **Variant Phenotype Score.** The human reference set is the HPO annotation of **each of the variant's diseases, one disease at a time**. The highest score is reported, with the disease(s) that reached it. Tied diseases are all listed, because no single disease is the better match.
 - **Gene Phenotype Score.** The human reference set is **every HPO term annotated to the human gene**, across all its diseases. A gene score well above the variant score suggests the mouse model resembles a different disease of the same gene.
+
+### Pooled gene score (mouse queries)
+
+A submitted mouse variant has no MGI phenotypes unless it matches an existing allele, and a novel variant matches none. For mouse queries VarLift therefore scores the **gene** rather than the variant:
+
+- **Mouse terms.** The abnormal MP annotations of every MGI allele of the mouse gene are pooled, each term counted once. A term that is abnormal in any allele counts as abnormal; "normal" annotations are listed in the term mapping panel only when no allele of the gene has the term as abnormal. Alleles of other genes listed in Mouse Allele Coverage (for example, other members of a gene cluster) are not pooled.
+- **Human reference set.** Every HPO term annotated to the human gene, as for the Gene Phenotype Score.
+- **Score.** Steps 1–4 above, applied to the pooled set.
+
+The pooled score asks how well what is known about the mouse gene's phenotypes reflects the human gene's diseases. It does not say whether the submitted variant itself causes those phenotypes.
 
 ### Worked example
 
@@ -343,6 +370,7 @@ How often the source resources themselves are released (approximate):
 - **Disease Match uses exact MONDO IDs.** A mouse model of a closely related disease (a parent or child term in MONDO) does not count as a match.
 - **Phenotype coverage depends on the MP–HPO mappings.** MP terms without a curated HPO mapping cannot contribute. Check **MP Terms Mapped to HPO** before reading a low score as a poor model.
 - **Phenotypes are scored per allele.** MGI phenotypes are annotated to genotypes. VarLift pools all genotypes that carry an allele, including different genetic backgrounds and zygosities.
+- **The mouse-query phenotype score pools the whole gene.** It mixes phenotypes from different kinds of alleles (for example, knockouts, conditional alleles, knock-ins and transgenes), and well-studied alleles contribute the most terms. It describes the gene, not the submitted variant.
 - **This is a research tool.** It is under active development. Confirm results against the primary resources before relying on them.
 
 ---

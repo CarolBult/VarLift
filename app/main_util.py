@@ -524,6 +524,77 @@ def phenotype_similarity(hum_prt_df, pairs, mouse_phenotype_df, detail=False):
 
     return pd.DataFrame(rows)
 
+
+def gene_phenotype_similarity(allele_coverage_df, gene_inputs):
+    '''
+    Pooled gene-level phenotype similarity for a mouse query. A submitted mouse variant
+    may be novel and match no MGI allele, so it has no phenotypes of its own. Instead the
+    abnormal MP terms of every MGI allele of the queried mouse gene are pooled into one
+    set and scored against the HPO terms of the human homolog (genes_to_phenotype.txt),
+    giving one score per submitted variant.
+
+    Parameters
+        allele_coverage_df: DataFrame. Mouse Allele Coverage table (query_allele_coverage):
+            Marker, AlleleID, Phenotypes and Normal Phenotypes. Alleles of related markers
+            (gene clusters, overlapping genes) are not pooled.
+        gene_inputs: DataFrame. Input Name, Mus Gene and Hum Gene.
+
+    Returns
+        DataFrame. One row per Input Name with the columns of phenotype_similarity(detail=True)
+        plus Mus Gene, Hum Gene, Alleles Pooled, Alleles Total and Human HP Terms. AlleleID is the pooled
+        set's label; Matched Disease(s) and Phenotype Score (variant) are empty.
+    '''
+    from app.hpoa import lookup_hps_for_gene
+
+    if (allele_coverage_df is None or allele_coverage_df.empty or gene_inputs.empty
+            or not {'Marker', 'AlleleID', 'Phenotypes'} <= set(allele_coverage_df.columns)
+            or not {'Input Name', 'Mus Gene', 'Hum Gene'} <= set(gene_inputs.columns)):
+        return pd.DataFrame()
+
+    def _terms(values):
+        return {p for v in values if isinstance(v, list) for p in v if isinstance(p, str) and p.startswith('MP:')}
+
+    alleles = allele_coverage_df.drop_duplicates(subset=['Marker', 'AlleleID'])
+    mapping = gene_inputs[['Input Name', 'Mus Gene', 'Hum Gene']].dropna().drop_duplicates()
+
+    # One pooled phenotype set per mouse gene. A term abnormal in any allele counts as
+    # abnormal; Normal lists only terms no allele of the gene has as abnormal
+    pooled, counts = [], {}
+    for gene in mapping['Mus Gene'].unique():
+        own = alleles[alleles['Marker'] == gene]
+        abnormal = _terms(own['Phenotypes'])
+        if not abnormal:
+            continue
+        abnormal_ids = {p.partition(',')[0] for p in abnormal}
+        normal = {p for p in _terms(own.get('Normal Phenotypes', pd.Series(dtype=object)))
+                  if p.partition(',')[0] not in abnormal_ids}
+        with_phenotypes = own['Phenotypes'].map(lambda p: isinstance(p, list) and len(p) > 0).sum()
+        counts[gene] = (int(with_phenotypes), len(own))
+        pooled.append({'AlleleID': f'{gene} (all alleles)', 'Phenotypes': sorted(abnormal),
+                       'Normal Phenotypes': sorted(normal)})
+    if not pooled:
+        return pd.DataFrame()
+
+    pairs = mapping[mapping['Mus Gene'].isin(counts)][['Input Name', 'Mus Gene']].drop_duplicates()
+    pairs = pairs.assign(AlleleID=pairs['Mus Gene'] + ' (all alleles)')[['Input Name', 'AlleleID']]
+
+    # Human reference per input: the HPO terms of its human homolog(s)
+    gene_hps = {g: set(lookup_hps_for_gene(g) or []) for g in mapping['Hum Gene'].unique()}
+    reference = (mapping.groupby('Input Name')['Hum Gene']
+                 .agg(lambda genes: sorted(set().union(*(gene_hps[g] for g in genes))))
+                 .rename('HP_IDs_gene').rename_axis('Name').reset_index())
+
+    result = phenotype_similarity(reference, pairs, pd.DataFrame(pooled), detail=True)
+    if result.empty:
+        return result
+    genes = mapping.groupby('Input Name').agg({'Mus Gene': ', '.join, 'Hum Gene': lambda g: ', '.join(sorted(set(g)))})
+    result['Mus Gene'] = result['AlleleID'].str.replace(' (all alleles)', '', regex=False)
+    result['Hum Gene'] = result['Input Name'].map(genes['Hum Gene'])
+    result['Alleles Pooled'] = result['Mus Gene'].map(lambda g: counts[g][0])
+    result['Alleles Total'] = result['Mus Gene'].map(lambda g: counts[g][1])
+    result['Human HP Terms'] = result['Input Name'].map(reference.set_index('Name')['HP_IDs_gene'].map(len))
+    return result
+
 # ---- MOUSE QUERY ----
 def mvar_query(variants, assembly='GRCm39'):
     '''

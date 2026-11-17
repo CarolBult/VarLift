@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 
 import logging
 
-from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score, NoCodingVariantsError, phenotype_similarity
+from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score, NoCodingVariantsError, phenotype_similarity, gene_phenotype_similarity
 from app.processing_util import process_batch_query
 from app.transcript_alignment import transcript_alignment, transcript_overview
 from app.protein_alignment import SequenceUnavailable
@@ -139,7 +139,7 @@ def run_pipeline(data):
 
     # Stay empty when none of the variants has a coding consequence
     output_gene_df, output_prt_df, output_phenotype_df, score_df = (pd.DataFrame() for _ in range(4))
-    phenotype_similarity_df = pd.DataFrame()   # human queries only
+    phenotype_similarity_df = pd.DataFrame()   # variant and gene scores (human); gene score only (mouse)
 
     if data.organism == 'human':
 
@@ -160,6 +160,8 @@ def run_pipeline(data):
             output_gene_df, output_prt_df, output_phenotype_df, input_genes = hvar_fetch(query_prt_df, input_genes)
             score_df = mvar_query_score(query_prt_df, output_prt_df, input_genes)
             output_phenotype_df = sort_phenotypes_by_score(output_phenotype_df, score_df)
+            # Phenotypes of all the mouse gene's alleles, pooled, against the human homolog's HPO terms
+            phenotype_similarity_df = gene_phenotype_similarity(allele_coverage_df, input_genes)
 
     results = {'query_genes': query_gene_df.to_dict(orient='records'),
             'query_variants': query_prt_df.to_dict(orient='records'),

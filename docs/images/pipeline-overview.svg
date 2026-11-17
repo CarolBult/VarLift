@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1060" role="img" aria-label="VarLift pipeline overview. A human or mouse variant is annotated with Ensembl VEP and matched to comparison variants in the other species: every MGI allele of the mouse ortholog for a human query, or candidate ClinVar variants in the human ortholog for a mouse query. Each pair is scored on two tracks: variant equivalency, giving an Equivalency Tier from 1 to 5, and phenotype similarity, giving per-allele variant and gene scores for human queries and one pooled gene score for mouse queries. Results are reported with a Mouse Allele Coverage table. All data come from local snapshots of Ensembl, ClinVar, MGI and the Alliance, HPO and MONDO, and MP-HPO mappings." font-family="Calibri, Helvetica, Arial, sans-serif" font-size="13">
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#4b5563"/>
+    </marker>
+    <marker id="arrow-human" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrow-mouse" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#d97706"/>
+    </marker>
+    <marker id="arrow-pheno" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#15803d"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="900" height="1060" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="450" y="34" text-anchor="middle" font-size="17" font-weight="700" fill="#1e3a5f">VarLift pipeline overview</text>
+  <text x="450" y="54" text-anchor="middle" font-size="12" fill="#6b7280">Cross-species variant equivalency and phenotype similarity, in both directions</text>
+
+  <!-- Inputs -->
+  <rect x="127" y="74" width="220" height="54" rx="8" fill="#eff6ff" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="237" y="97" text-anchor="middle" font-weight="600" fill="#1e3a5f">Human variant (GRCh38)</text>
+  <text x="237" y="116" text-anchor="middle" font-size="11.5" fill="#4b5563" font-family="Courier New, monospace">chromosome:start-end:ref/alt</text>
+
+  <rect x="552" y="74" width="220" height="54" rx="8" fill="#fef3e2" stroke="#d97706" stroke-width="1.5"/>
+  <text x="662" y="97" text-anchor="middle" font-weight="600" fill="#92400e">Mouse variant (GRCm39)</text>
+  <text x="662" y="116" text-anchor="middle" font-size="11.5" fill="#4b5563" font-family="Courier New, monospace">chromosome:start-end:ref/alt</text>
+
+  <line x1="237" y1="128" x2="237" y2="170" stroke="#2563eb" stroke-width="1.3" marker-end="url(#arrow-human)"/>
+  <line x1="662" y1="128" x2="662" y2="170" stroke="#d97706" stroke-width="1.3" marker-end="url(#arrow-mouse)"/>
+
+  <!-- Stage 1: comparison variants -->
+  <text x="40" y="152" font-size="11" font-weight="600" fill="#6b7280">FIND THE COMPARISON VARIANTS</text>
+
+  <!-- Human query lane -->
+  <rect x="30" y="172" width="415" height="274" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="237" y="194" text-anchor="middle" font-weight="700" fill="#1e3a5f" font-size="14">Human query</text>
+
+  <rect x="56" y="206" width="364" height="44" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="238" y="225" text-anchor="middle" fill="#1f2937">VEP on the MANE Select transcript</text>
+  <text x="238" y="241" text-anchor="middle" font-size="11" fill="#4b5563">consequence · exon/intron · Pfam domain · amino-acid change</text>
+  <line x1="238" y1="250" x2="238" y2="262" stroke="#2563eb" stroke-width="1.2" marker-end="url(#arrow-human)"/>
+
+  <rect x="56" y="264" width="364" height="44" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="238" y="283" text-anchor="middle" fill="#1f2937">ClinVar conditions → MONDO diseases</text>
+  <text x="238" y="299" text-anchor="middle" font-size="11" fill="#4b5563">human HPO terms of each disease and of the gene</text>
+  <line x1="238" y1="308" x2="238" y2="320" stroke="#2563eb" stroke-width="1.2" marker-end="url(#arrow-human)"/>
+
+  <rect x="56" y="322" width="364" height="32" rx="6" fill="#ffffff" stroke="#4b5563" stroke-width="1.2"/>
+  <text x="238" y="343" text-anchor="middle" fill="#1f2937">Mouse ortholog (MGI homology report)</text>
+  <line x1="238" y1="354" x2="238" y2="366" stroke="#d97706" stroke-width="1.2" marker-end="url(#arrow-mouse)"/>
+
+  <rect x="56" y="368" width="364" height="60" rx="6" fill="#fef3e2" stroke="#d97706" stroke-width="1.2"/>
+  <text x="238" y="387" text-anchor="middle" fill="#1f2937">Every MGI allele of the mouse gene with coordinates</text>
+  <text x="238" y="403" text-anchor="middle" font-size="11" fill="#92400e">VEP on each mouse transcript (GRCm39)</text>
+  <text x="238" y="418" text-anchor="middle" font-size="11" fill="#92400e">+ disease models (MONDO) and MP phenotypes</text>
+
+  <!-- Mouse query lane -->
+  <rect x="455" y="172" width="415" height="274" rx="10" fill="#fef3e2" stroke="#fcd34d" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="662" y="194" text-anchor="middle" font-weight="700" fill="#92400e" font-size="14">Mouse query</text>
+
+  <rect x="481" y="206" width="364" height="44" rx="6" fill="#ffffff" stroke="#d97706" stroke-width="1.2"/>
+  <text x="663" y="225" text-anchor="middle" fill="#1f2937">VEP on the canonical mouse transcript</text>
+  <text x="663" y="241" text-anchor="middle" font-size="11" fill="#4b5563">+ MGI alleles at the submitted position, if any</text>
+  <line x1="663" y1="250" x2="663" y2="262" stroke="#4b5563" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <rect x="481" y="264" width="364" height="32" rx="6" fill="#ffffff" stroke="#4b5563" stroke-width="1.2"/>
+  <text x="663" y="285" text-anchor="middle" fill="#1f2937">Human ortholog (MGI homology report)</text>
+  <line x1="663" y1="296" x2="663" y2="308" stroke="#2563eb" stroke-width="1.2" marker-end="url(#arrow-human)"/>
+
+  <rect x="481" y="310" width="364" height="60" rx="6" fill="#eff6ff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="663" y="329" text-anchor="middle" fill="#1f2937">Candidate ClinVar variants in the human gene</text>
+  <text x="663" y="345" text-anchor="middle" font-size="11" fill="#1e3a5f">coding: same amino-acid change</text>
+  <text x="663" y="360" text-anchor="middle" font-size="11" fill="#1e3a5f">splice/intronic: same intron offset (e.g. +1)</text>
+  <line x1="663" y1="370" x2="663" y2="382" stroke="#2563eb" stroke-width="1.2" marker-end="url(#arrow-human)"/>
+
+  <rect x="481" y="384" width="364" height="44" rx="6" fill="#ffffff" stroke="#2563eb" stroke-width="1.2"/>
+  <text x="663" y="403" text-anchor="middle" fill="#1f2937">VEP on each candidate (GRCh38)</text>
+  <text x="663" y="419" text-anchor="middle" font-size="11" fill="#4b5563">+ HPO terms of the human gene</text>
+
+  <!-- Both lanes feed both tracks -->
+  <line x1="237" y1="446" x2="237" y2="470" stroke="#4b5563" stroke-width="1.2"/>
+  <line x1="662" y1="446" x2="662" y2="470" stroke="#4b5563" stroke-width="1.2"/>
+  <line x1="237" y1="470" x2="662" y2="470" stroke="#4b5563" stroke-width="1.2"/>
+  <line x1="237" y1="470" x2="237" y2="500" stroke="#4b5563" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <line x1="662" y1="470" x2="662" y2="500" stroke="#4b5563" stroke-width="1.3" marker-end="url(#arrow)"/>
+  <text x="450" y="463" text-anchor="middle" font-size="11" fill="#6b7280">each submitted variant × comparison variant × transcript</text>
+
+  <!-- Stage 2: scoring -->
+  <text x="40" y="492" font-size="11" font-weight="600" fill="#6b7280">SCORE</text>
+
+  <!-- Variant equivalency track -->
+  <rect x="30" y="502" width="415" height="278" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="237" y="524" text-anchor="middle" font-weight="700" fill="#1e3a5f" font-size="14">Variant equivalency</text>
+
+  <rect x="56" y="536" width="364" height="44" rx="6" fill="#ffffff" stroke="#1e3a5f" stroke-width="1.2"/>
+  <text x="238" y="555" text-anchor="middle" fill="#1f2937">Scoring class from the VEP consequence</text>
+  <text x="238" y="571" text-anchor="middle" font-size="11" fill="#4b5563">Coding · Splice/Intronic (others not evaluated)</text>
+  <line x1="238" y1="580" x2="238" y2="592" stroke="#4b5563" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <rect x="56" y="594" width="364" height="44" rx="6" fill="#ffffff" stroke="#1e3a5f" stroke-width="1.2"/>
+  <text x="238" y="613" text-anchor="middle" fill="#1f2937">Protein alignment (global, BLOSUM62)</text>
+  <text x="238" y="629" text-anchor="middle" font-size="11" fill="#4b5563">aligned residue · equivalent intron · local identity</text>
+  <line x1="238" y1="638" x2="238" y2="650" stroke="#4b5563" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <rect x="56" y="652" width="364" height="60" rx="6" fill="#ffffff" stroke="#1e3a5f" stroke-width="1.2"/>
+  <text x="238" y="671" text-anchor="middle" fill="#1f2937">Criteria for the class</text>
+  <text x="238" y="687" text-anchor="middle" font-size="11" fill="#4b5563">Coding: Biotype · Consequence · AA · AA Position · Domain (Pfam clan)</text>
+  <text x="238" y="702" text-anchor="middle" font-size="11" fill="#4b5563">Splice/Intronic: Biotype · Consequence · Intron · Intron Offset</text>
+  <line x1="238" y1="712" x2="238" y2="724" stroke="#4b5563" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <rect x="56" y="726" width="364" height="44" rx="6" fill="#1e3a5f" stroke="#1e3a5f"/>
+  <text x="238" y="745" text-anchor="middle" fill="#ffffff" font-weight="600">Equivalency Tier 1–5 (first tier that applies)</text>
+  <text x="238" y="761" text-anchor="middle" font-size="11" fill="#dbeafe">+ Disease Match (same MONDO ID; human queries)</text>
+
+  <!-- Phenotype similarity track -->
+  <rect x="455" y="502" width="415" height="278" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="662" y="524" text-anchor="middle" font-weight="700" fill="#14532d" font-size="14">Phenotype similarity</text>
+
+  <rect x="481" y="536" width="364" height="44" rx="6" fill="#fef3e2" stroke="#d97706" stroke-width="1.2"/>
+  <text x="663" y="555" text-anchor="middle" fill="#1f2937">Mouse MP terms (MGI), abnormal only</text>
+  <text x="663" y="571" text-anchor="middle" font-size="11" fill="#92400e">not scored: top-level systems, "no abnormal phenotype", normal</text>
+  <line x1="663" y1="580" x2="663" y2="592" stroke="#d97706" stroke-width="1.2" marker-end="url(#arrow-mouse)"/>
+
+  <rect x="481" y="594" width="364" height="44" rx="6" fill="#fef3e2" stroke="#d97706" stroke-width="1.2"/>
+  <text x="663" y="613" text-anchor="middle" fill="#1f2937">MP → HPO via SSSOM, weighted by mapping type</text>
+  <text x="663" y="629" text-anchor="middle" font-size="11" fill="#92400e">exact 1 · narrow/broad 0.75 · close 0.5 · related 0.25</text>
+  <line x1="663" y1="638" x2="663" y2="650" stroke="#15803d" stroke-width="1.2" marker-end="url(#arrow-pheno)"/>
+
+  <rect x="481" y="652" width="364" height="44" rx="6" fill="#ffffff" stroke="#15803d" stroke-width="1.2"/>
+  <text x="663" y="671" text-anchor="middle" fill="#1f2937">Closest human HPO term, Lin similarity</text>
+  <text x="663" y="687" text-anchor="middle" font-size="11" fill="#4b5563">score = Σ (weight × similarity) ÷ Σ weight (asymmetric)</text>
+  <line x1="547" y1="696" x2="547" y2="724" stroke="#15803d" stroke-width="1.2" marker-end="url(#arrow-pheno)"/>
+  <line x1="663" y1="696" x2="663" y2="724" stroke="#15803d" stroke-width="1.2" marker-end="url(#arrow-pheno)"/>
+  <line x1="779" y1="696" x2="779" y2="724" stroke="#15803d" stroke-width="1.2" marker-end="url(#arrow-pheno)"/>
+
+  <rect x="481" y="726" width="112" height="44" rx="6" fill="#14532d" stroke="#14532d"/>
+  <text x="537" y="744" text-anchor="middle" fill="#ffffff" font-weight="600" font-size="12">Variant score</text>
+  <text x="537" y="760" text-anchor="middle" fill="#dcfce7" font-size="10.5">per allele, per disease</text>
+
+  <rect x="607" y="726" width="112" height="44" rx="6" fill="#14532d" stroke="#14532d"/>
+  <text x="663" y="744" text-anchor="middle" fill="#ffffff" font-weight="600" font-size="12">Gene score</text>
+  <text x="663" y="760" text-anchor="middle" fill="#dcfce7" font-size="10.5">per allele</text>
+
+  <rect x="733" y="726" width="112" height="44" rx="6" fill="#14532d" stroke="#14532d"/>
+  <text x="789" y="744" text-anchor="middle" fill="#ffffff" font-weight="600" font-size="12">Pooled gene score</text>
+  <text x="789" y="760" text-anchor="middle" fill="#dcfce7" font-size="10.5">all alleles of the gene</text>
+
+  <!-- Reference-set brackets under the outputs -->
+  <text x="600" y="796" text-anchor="middle" font-size="10.5" fill="#1e3a5f">human queries</text>
+  <line x1="485" y1="786" x2="715" y2="786" stroke="#2563eb" stroke-width="1"/>
+  <text x="789" y="796" text-anchor="middle" font-size="10.5" fill="#92400e">mouse queries</text>
+  <line x1="737" y1="786" x2="841" y2="786" stroke="#d97706" stroke-width="1"/>
+
+  <!-- Output -->
+  <text x="40" y="824" font-size="11" font-weight="600" fill="#6b7280">REPORT</text>
+  <line x1="40" y1="830" x2="860" y2="830" stroke="#e5e7eb" stroke-width="1"/>
+
+  <rect x="30" y="840" width="270" height="88" rx="8" fill="#f8fafc" stroke="#2563eb" stroke-width="1.3"/>
+  <text x="165" y="860" text-anchor="middle" font-weight="700" fill="#1e293b">Human query results</text>
+  <text x="165" y="878" text-anchor="middle" font-size="11" fill="#4b5563">mouse alleles ranked by best tier</text>
+  <text x="165" y="893" text-anchor="middle" font-size="11" fill="#4b5563">and Disease Match; variant and gene</text>
+  <text x="165" y="908" text-anchor="middle" font-size="11" fill="#4b5563">phenotype scores with term mapping</text>
+
+  <rect x="315" y="840" width="270" height="88" rx="8" fill="#f8fafc" stroke="#d97706" stroke-width="1.3"/>
+  <text x="450" y="860" text-anchor="middle" font-weight="700" fill="#1e293b">Mouse query results</text>
+  <text x="450" y="878" text-anchor="middle" font-size="11" fill="#4b5563">candidate human variants ranked by tier;</text>
+  <text x="450" y="893" text-anchor="middle" font-size="11" fill="#4b5563">pooled gene phenotype score with</text>
+  <text x="450" y="908" text-anchor="middle" font-size="11" fill="#4b5563">term mapping; human phenotypes</text>
+
+  <rect x="600" y="840" width="270" height="88" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.3"/>
+  <text x="735" y="860" text-anchor="middle" font-weight="700" fill="#1e293b">Mouse Allele Coverage</text>
+  <text x="735" y="878" text-anchor="middle" font-size="11" fill="#4b5563">every MGI allele of the gene: evaluated</text>
+  <text x="735" y="893" text-anchor="middle" font-size="11" fill="#4b5563">or not (with the reason), diseases</text>
+  <text x="735" y="908" text-anchor="middle" font-size="11" fill="#4b5563">modeled and phenotypes</text>
+
+  <!-- Data sources -->
+  <text x="40" y="956" font-size="11" font-weight="600" fill="#6b7280">LOCAL DATA SNAPSHOTS</text>
+  <line x1="40" y1="962" x2="860" y2="962" stroke="#e5e7eb" stroke-width="1"/>
+
+  <rect x="30" y="970" width="160" height="58" rx="6" fill="#ffffff" stroke="#9ca3af" stroke-width="1"/>
+  <text x="110" y="988" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2937">Ensembl 116</text>
+  <text x="110" y="1004" text-anchor="middle" font-size="10.5" fill="#4b5563">VEP caches · gene models</text>
+  <text x="110" y="1018" text-anchor="middle" font-size="10.5" fill="#4b5563">protein sequences</text>
+
+  <rect x="200" y="970" width="160" height="58" rx="6" fill="#ffffff" stroke="#9ca3af" stroke-width="1"/>
+  <text x="280" y="988" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2937">ClinVar</text>
+  <text x="280" y="1004" text-anchor="middle" font-size="10.5" fill="#4b5563">VCF (GRCh38)</text>
+  <text x="280" y="1018" text-anchor="middle" font-size="10.5" fill="#4b5563">variant_summary</text>
+
+  <rect x="370" y="970" width="160" height="58" rx="6" fill="#ffffff" stroke="#9ca3af" stroke-width="1"/>
+  <text x="450" y="988" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2937">MGI + Alliance</text>
+  <text x="450" y="1004" text-anchor="middle" font-size="10.5" fill="#4b5563">orthologs · allele coordinates</text>
+  <text x="450" y="1018" text-anchor="middle" font-size="10.5" fill="#4b5563">disease models · phenotypes</text>
+
+  <rect x="540" y="970" width="160" height="58" rx="6" fill="#ffffff" stroke="#9ca3af" stroke-width="1"/>
+  <text x="620" y="988" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2937">HPO + MONDO</text>
+  <text x="620" y="1004" text-anchor="middle" font-size="10.5" fill="#4b5563">hp.obo · phenotype.hpoa</text>
+  <text x="620" y="1018" text-anchor="middle" font-size="10.5" fill="#4b5563">genes_to_phenotype · MONDO</text>
+
+  <rect x="710" y="970" width="160" height="58" rx="6" fill="#ffffff" stroke="#9ca3af" stroke-width="1"/>
+  <text x="790" y="988" text-anchor="middle" font-weight="600" font-size="12" fill="#1f2937">MP–HPO · Pfam</text>
+  <text x="790" y="1004" text-anchor="middle" font-size="10.5" fill="#4b5563">SSSOM mappings · mp.obo</text>
+  <text x="790" y="1018" text-anchor="middle" font-size="10.5" fill="#4b5563">InterPro Pfam names, clans</text>
+
+  <!-- Legend -->
+  <g transform="translate(40, 1046)">
+    <rect x="0" y="-9" width="12" height="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1"/>
+    <text x="18" y="1" font-size="11" fill="#4b5563">human data</text>
+    <rect x="110" y="-9" width="12" height="12" fill="#fef3e2" stroke="#d97706" stroke-width="1"/>
+    <text x="128" y="1" font-size="11" fill="#4b5563">mouse data</text>
+    <rect x="220" y="-9" width="12" height="12" fill="#1e3a5f"/>
+    <text x="238" y="1" font-size="11" fill="#4b5563">variant score</text>
+    <rect x="335" y="-9" width="12" height="12" fill="#14532d"/>
+    <text x="353" y="1" font-size="11" fill="#4b5563">phenotype scores</text>
+  </g>
+</svg>
