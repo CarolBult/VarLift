@@ -68,14 +68,14 @@
 
     Description: Human gene data extracted from Ensembl GFF3.
 
-    Created by: ```parse_ensembl_gff3('data/Ensembl/Homo_sapiens.GRCh38.115.gff3.gz', species)```
+    Created by: ```parse_ensembl_gff3('data/Ensembl/Homo_sapiens.GRCh38.116.gff3.gz', species)``` (release from `ensemble_version` in app/config.yaml, via app/data_refresh.py)
 
 
 2. data/Ensembl/mouse_gene_data.parquet
 
     Description: Mouse gene data extracted from Ensembl GFF3.
 
-    Created by: ```parse_ensembl_gff3('data/Ensembl/Mus_musculus.GRCm39.115.gff3.gz', species)```
+    Created by: ```parse_ensembl_gff3('data/Ensembl/Mus_musculus.GRCm39.116.gff3.gz', species)```
 
 
 

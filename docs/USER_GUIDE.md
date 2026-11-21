@@ -120,6 +120,18 @@ This section shows how many of the gene's mouse alleles VarLift could assess, an
 3. **Amino Acid Change.** The change on that transcript. Residue numbers can differ between transcripts and between species. For example, Acvr1 tm1Emsh is R206H on most transcripts but R176H on ENSMUST00000469963.
 4. **Associated Diseases.** The allele's disease models, with their MONDO IDs.
 
+#### The alignment panel (Align)
+
+**Align**, beside each Transcript ID, opens a codon-level alignment of the submitted variant's transcript and that row's transcript beneath the row. The example is Acvr1 tm1Emsh on ENSMUST00000469963, a shorter transcript:
+
+![Alignment of human ENST00000434821 with mouse ENSMUST00000469963](images/13-alignment.png)
+
+1. **Summary.** Which residue the submitted residue aligns to (here human R206 to mouse R176) and both codons, then the length and identity of the two proteins and any stretch one of them lacks (this transcript lacks 30 residues of the extracellular domain).
+2. **Pfam domains.** One colour per domain, linked to InterPro. Domain lines above and below the sequences show where each protein's domains lie.
+3. **The alignment.** For each block of 20 residues: the human codons and residues, a line marking identical (`|`) and different (`.`) residues, then the mouse residues and codons. Bases that differ between the codons are bold red, and the variant residue is highlighted.
+4. **Key** to the highlighting and marks.
+5. **Show the full alignment.** At first only the 30 residues either side of the variant are shown; this shows the whole protein (and **Show the region around the variant** goes back). **Close** closes the panel, as does clicking **Align** again.
+
 ### Variant Equivalency Scoring
 
 ![Variant Equivalency Scoring table](images/08-scoring.png)
@@ -131,7 +143,21 @@ This section shows how many of the gene's mouse alleles VarLift could assess, an
    **Local Alignment Identity** is the fraction of the 10 residues on each side that align to identical residues. Below 0.3, about what unrelated proteins give, the aligned position is uncertain.
 5. **Disease Match** (human queries only). `true` when the allele models at least one of the human variant's conditions (same MONDO ID). It is shown beside the tier, not combined with it.
 
+The screenshot shows four of the 85 rows: tm1Emsh on two transcripts, another R206H knock-in (tm2.1Vlcg), and tm1Mak, a G328V allele. tm1Mak shares the biotype and consequence but not the amino-acid change, the residue or the domain, so it is Tier 4 with open circles for those criteria.
+
 Rows are grouped by allele. Alleles are ordered by their best tier on a protein-coding transcript, then by Disease Match; transcripts within an allele are ordered by tier. The Phenotype Similarity table lists alleles in the same order.
+
+#### All transcripts aligned (Aligned Position)
+
+Clicking a number under **Aligned Position** opens an overview of every transcript scored for that allele, each aligned to the submitted variant's transcript. It shows at a glance whether the variant falls at the equivalent residue in all of them. The example was opened from tm1Emsh on ENSMUST00000469963:
+
+![Every Acvr1 transcript aligned to human ENST00000434821](images/14-transcript-overview.png)
+
+1. **Summary.** How many transcripts are shown and whether the variant residue aligns with the submitted residue in every one of them.
+2. **Reference.** The human transcript. Every bar below is drawn on its residue numbering (here 1–509), and the dashed line marks the submitted residue, R206.
+3. **The selected transcript**, highlighted. Solid bar: residues that align to the human protein. Dashed line: human residues this transcript lacks (here 30 residues near the start). Coloured strips beneath each bar are Pfam domains, and a purple mark (for example `+44`) shows residues found only in that transcript.
+4. **The variant mark.** Green when the transcript's variant residue aligns with the human variant, orange when it falls elsewhere. Here it is labelled R176 but sits on the dashed line: the same residue, numbered differently.
+5. **Key** to the bars and marks. Hover over a bar or strip for its residue numbers.
 
 ### Phenotype Similarity (human queries)
 
@@ -175,6 +201,8 @@ The example below is a Pax6 splice-donor variant (`2:105522966-105522966:G/T`). 
 #### Gene Phenotype Similarity (mouse queries)
 
 A submitted mouse variant may be novel, so it may match no MGI allele and have no phenotypes of its own. VarLift therefore compares phenotypes at the gene level: the MGI phenotypes of every allele of the mouse gene are pooled into one set and compared with all HPO terms of the human gene. The table has one row:
+
+![Gene Phenotype Similarity for Mecp2 R133C](images/12-gene-phenotype-similarity.png)
 
 1. **Mouse Phenotypes.** The pooled phenotypes of the mouse gene, for example "Mecp2, all alleles".
 2. **Alleles with Phenotypes.** How many of the gene's MGI alleles have phenotype annotations, of all its alleles in Mouse Allele Coverage (for Mecp2, 26 of 68).

@@ -16,7 +16,20 @@ from app.data_util import count_header_lines
 with open('app/config.yaml') as f:
     _config = yaml.safe_load(f)
 
-# Weight each SSSOM predicate by how equivalent the mapping is
+# Weight each SSSOM predicate by how equivalent the mapping is. The weight sets how much a
+# translated HP term counts in the score (numerator and denominator alike), so a loose
+# translation can neither earn nor lose as much as an exact one:
+#   - exactMatch (1.0): the MP and HP terms describe the same phenotype.
+#   - narrowMatch / broadMatch (0.75): one term is a more specific form of the other. The
+#     phenotype is the same kind but at a different level of detail; neither direction is
+#     favoured, since the score cares whether the phenotype is present, not how specific.
+#   - closeMatch (0.5): similar enough to use in some contexts but, by the SKOS definition,
+#     not interchangeable.
+#   - relatedMatch (0.25): associated terms (for example, a structure and its function) that
+#     are not the same phenotype; kept at a low weight rather than dropped.
+# The steps are an ordinal judgement of mapping strength, not fitted values. Each weight is
+# multiplied by the mapping's SSSOM confidence (1.0 when it gives none), and predicates not
+# listed here (none in the current file) are left out.
 PREDICATE_WEIGHTS = {
     'skos:exactMatch': 1.0,
     'skos:narrowMatch': 0.75,

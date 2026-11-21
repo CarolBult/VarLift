@@ -6,6 +6,7 @@ import pandas as pd
 import subprocess
 import json
 import os
+import platform
 import shutil
 import tempfile
 import threading
@@ -26,6 +27,9 @@ interpro_base_url = config['api']['interpro_base_url']
 apptainer_main = config['paths']['apptainer_main']
 vep_output_file = config['paths']['vep_output']
 vep_input_file = config['paths']['vep_input']
+
+# Folder holding ensembl-vep.sif, vep_cache and processing (app/vep)
+vep_dir = Path(vep_input_file).parent.parent.resolve()
 
 # Number of VEP worker processes (--fork); None runs VEP in one process.
 # The batch runner sets this, the web app leaves it unset.
@@ -131,8 +135,6 @@ def vep_input(variants, input_path):
     '''
     unique_variants = variants.drop_duplicates(subset='Submission')
 
-    print(unique_variants)
-
     with open(input_path, 'w') as f:
         # VCF meta-information
         f.write('##fileformat=VCFv4.0\n')
@@ -156,23 +158,32 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
         coding_only: bool. Only report consequences in coding sequence. Defaults to True.
     '''
 
-    host_main = os.path.expanduser('~/VarLift/app/vep')
+    # macOS runs Apptainer inside the Lima VM, where app/vep is already mounted at /main.
+    # Linux and Windows (WSL) run Apptainer directly, binding app/vep to /main; the
+    # image path is read before the bind applies, so it must be the host path.
+    if platform.system() == 'Darwin':
+        cmd = ['limactl', 'shell', 'apptainer', '--',
+               'apptainer', 'exec',
+               '--bind', '/main:/main',
+               '/main/ensembl-vep.sif']
+    else:
+        cmd = ['apptainer', 'exec',
+               '--bind', f'{vep_dir}:/main',
+               f'{vep_dir}/ensembl-vep.sif']
 
-    cmd = ['apptainer', 'exec',
-           '--bind', f'{host_main}:/main',
-           f'{host_main}/ensembl-vep.sif', 'vep',
-           '--dir_cache', '/main/vep_cache',
-           '--input_file', f'/main/processing/{input_file}',
-           '--output_file', f'/main/processing/{output_file}',
-           '--json',
-           '--cache',
-           '--offline',
-           '--force_overwrite',
-           '--species', species,
-           '--domains',
-           '--biotype',
-           '--symbol',
-           '--numbers']
+    cmd += ['vep',
+            '--dir_cache', '/main/vep_cache',
+            '--input_file', f'/main/processing/{input_file}',
+            '--output_file', f'/main/processing/{output_file}',
+            '--json',
+            '--cache',
+            '--offline',
+            '--force_overwrite',
+            '--species', species,
+            '--domains',
+            '--biotype',
+            '--symbol',
+            '--numbers']
 
     if coding_only:
         cmd += ['--coding_only']

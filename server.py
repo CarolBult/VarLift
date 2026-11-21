@@ -119,10 +119,6 @@ def run_variants(data: VariantInput):
 
 
 def run_pipeline(data):
-
-    print(data.variants)
-    print(data.organism)
-
     variants = process_batch_query(data.variants)
 
     if variants.empty:

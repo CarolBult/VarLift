@@ -253,16 +253,10 @@ function renderTables(name, gene) {
         sortedScores = groupedScoreSort(scores);
         const rank = new Map(sortedScores.map((row, index) => [`${row['AlleleID']}||${row['Transcript ID']}`, index]));
 
-        console.log(rank)
-
         sortedOutputProteins = [...outputProteins].sort((a, b) =>
             (rank.get(`${a['AlleleID']}||${a['Transcript ID']}`) ?? Infinity) -
             (rank.get(`${b['AlleleID']}||${b['Transcript ID']}`) ?? Infinity)
         );
-
-        console.log(outputProteins)
-        console.log(sortedOutputProteins)
-
 
     }
     else if (org === 'mouse') {
@@ -284,8 +278,6 @@ function renderTables(name, gene) {
         // Sort output proteins and score dataframes
         sortedScores = groupedScoreSort(scores);
         const rank = new Map(sortedScores.map((row, index) => [`${row['Name']}||${row['Transcript ID']}`, index]));
-
-        console.log(rank)
 
         sortedOutputProteins = [...outputProteins].sort((a, b) =>
             (rank.get(`${a['Name']}||${a['Transcript ID']}`) ?? Infinity) -
@@ -1825,7 +1817,8 @@ function formatCell(row, col, tableId, org) {
         value = `<a href="https://www.ncbi.nlm.nih.gov/clinvar?term=${value}" target="_blank" rel="noopener noreferrer">${value}</a>`;
     }
 
-    return value;
+    // Empty values (e.g. Intron for a coding variant) show as a blank cell, not "null"
+    return value === null || value === undefined ? '' : value;
 }
 
 

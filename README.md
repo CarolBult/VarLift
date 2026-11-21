@@ -14,7 +14,7 @@ Genome sequencing has become increasingly prevalent in clinical and research set
 
 ## Instructions
 ### Prerequisites
-1. macOS: VarLift has been created for macOS, but could easily be adapted for personal on Linux by removing the Apptainer call from the vep command.
+1. macOS, Linux, or Windows: VarLift was created for macOS and also runs on Linux and on Windows through WSL2. On Windows, follow [WINDOWS.md](WINDOWS.md) in place of the Lima steps below.
 
 2. Homebrew: Used to download Lima
 
@@ -49,9 +49,9 @@ Genome sequencing has become increasingly prevalent in clinical and research set
 
     Restart terminal to ensure the change has taken effect.
 
-3. Create a Ensembl VEP image inside the apptainer VM.
+3. Create an Ensembl VEP image inside the apptainer VM.
 
-    VarLift uses Ensembl VEP, which requires a Linux environment to be run. Lima provides the Linux environment and Apptainer creates teh containerized image where vep can be run.
+    VarLift uses Ensembl VEP, which requires a Linux environment to be run. Lima provides the Linux environment and Apptainer creates the containerized image where vep can be run.
 
     ```
     limactl start apptainer # start apptainer instance
@@ -97,85 +97,96 @@ To use the web app locally follow the steps below:
 
 3. Insert a list of variants into the search field and submit the query.
 
+### Example Variants
+
+These variants exercise the main paths through VarLift and are useful for checking an installation. Human variants are GRCh38 and mouse variants GRCm39; choose the matching organism before submitting. Several human variants can be submitted together, one per line.
+
+| Variant | Organism | Gene and change | What it shows |
+|---|---|---|---|
+| `2:157774114-157774114:C/T` | Human | ACVR1 R206H (fibrodysplasia ossificans progressiva) | Three Tier 1 knock-in alleles that model the same disease (Disease Match); one allele numbers the residue R176 on a shorter transcript but still aligns to R206 |
+| `X:154030948-154030948:G/A` | Human | MECP2 R306\* (Rett syndrome) | A stop-gained variant: Tier 1 and Tier 2 alleles, and many alleles that are a different consequence (Tier 5) |
+| `7:140753336-140753336:A/T` | Human | BRAF V600E | Three Tier 1 alleles; ClinVar lists many cancer conditions |
+| `12:112477719-112477719:A/G` | Human | PTPN11 N308D (Noonan syndrome) | One Tier 1 allele among alleles at other residues of the same domain (Tier 3) |
+| `X:73080081-73080081:G/A` | Mouse | Mecp2 R133C | Mouse query: nine ClinVar R>C candidates, of which only human R145C is at the aligned residue (Tier 1); pooled gene phenotype score |
+| `2:105522966-105522966:G/T` | Mouse | Pax6 splice donor | Splice/Intronic scoring class: Intron and Intron Offset Match |
+
+The web page also offers some of these as clickable examples above the search field.
+
 
 ### Local Python Use
 
-Create new a python file for your use.
+The pipeline can also be run from Python, from the repository root with the conda environment active. These are the steps the web app runs (see `run_pipeline` in `server.py`).
 
-1. Import processing function from `app/processing_util.py`. Import query and fetch functions from `app/main_util.py`.
+1. Human variants to equivalent mouse alleles:
 
-    ```
-    from app.processing_util import prepare_submission
-    from app.main_util import hvar_query, mvar_fetch, hvar_query_score, mvar_query, hvar_fetch, mvar_query_score
+    ```python
+    from app.processing_util import process_batch_query
+    from app.main_util import hvar_query, mvar_fetch, hvar_query_score
+
+    # One variant per line; process_batch_query parses them (a tab and a label may follow each variant)
+    variants = process_batch_query('2:157774114-157774114:C/T\n12:112477719-112477719:A/G').drop(columns='Label')
+
+    query_gene_df, query_prt_df, input_genes, unevaluated_df = hvar_query(variants)
+    output_gene_df, output_prt_df, output_phenotype_df, input_genes, allele_coverage_df = mvar_fetch(input_genes)
+    score_df = hvar_query_score(query_prt_df, output_prt_df, input_genes, mouse_phenotype_df=output_phenotype_df)
     ```
 
-2. Prepare variant formatting for pipeline.
-   
-    ```
-    imput = '2:157774114-157774114:C/T\n1:39468726-39468726:T/G''
-    variants = prepare_submission(input)
+2. Mouse variants to candidate human variants:
+
+    ```python
+    from app.processing_util import process_batch_query
+    from app.main_util import mvar_query, hvar_fetch, mvar_query_score, gene_phenotype_similarity
+
+    variants = process_batch_query('X:73080081-73080081:G/A').drop(columns='Label')
+
+    query_gene_df, query_prt_df, input_genes, unevaluated_df, allele_coverage_df = mvar_query(variants)
+    output_gene_df, output_prt_df, output_phenotype_df, input_genes = hvar_fetch(query_prt_df, input_genes)
+    score_df = mvar_query_score(query_prt_df, output_prt_df, input_genes)
+    gene_score_df = gene_phenotype_similarity(allele_coverage_df, input_genes)
     ```
 
-3. Submit variants to the pipeline.
-
-    ```
-    query_gene_df, query_prt_df, input_genes = hvar_query(variants)
-    output_gene_df, output_prt_df, output_phenotype_df, input_genes = mvar_fetch(input_genes)
-    score_df = hvar_query_score(query_prt_df, output_prt_df, input_genes)
-    ```
+`unevaluated_df` lists submitted variants VarLift could not score (for example, intergenic or non-coding ones).
 
 ## Output
 
-1. Input gene table: Provides information on the given variant on a gene level.
+The web app returns one JSON object per search, which **Download All Results** saves and **Load Results** reopens. Its tables are:
 
-    ```
-    Gene Symbol Description Biotype Chromosome  Start	End	Strand	Ensembl_ID	Accession
-    ACVR1 activin A receptor type 1	protein_coding	2	157736249	157876347	-	ENSG00000115170	HGNC:171
-    ```
+| Key | Contents |
+|---|---|
+| `query_genes`, `query_variants` | The submitted variants and their genes, annotated by VEP on one transcript (consequence, exon or intron, Pfam domain, amino-acid change, and for human variants PolyPhen and ClinVar conditions with MONDO IDs) |
+| `output_genes`, `output_variants` | The homologous gene and the variants compared with the submitted ones: MGI alleles with coordinates on every transcript (human queries), or ClinVar candidate variants (mouse queries) |
+| `scores` | One row per compared variant and transcript: the Equivalency Tier and the criteria behind it (below) |
+| `phenotypes` | MGI phenotypes of the compared alleles (human queries), or ClinVar HPO phenotypes of the candidates (mouse queries) |
+| `phenotype_similarity` | Phenotype similarity scores with the term-by-term mapping behind each (below) |
+| `allele_coverage` | Every MGI allele of the mouse gene, whether it could be evaluated (and why not), its phenotypes and disease models |
+| `gene_mapping` | Each submitted variant's gene and its homolog |
+| `unevaluated_variants` | Submitted variants that could not be scored |
+| `hp_names`, `labels` | Names for the HPO IDs in the results, and the labels entered with the variants |
 
-2. Input variant table: Provides information on the given variant on a transcript level.
+### Equivalency score columns
 
-    ```
-    Gene Symbol	Transcript ID	Biotype	Exon Rank	Pfam Domain ID	Pfam Domain Name	Polyphen Prediction	Polyphen Score	Molecular Consequence	Sequence Change	Amino Acids	Associated Diseases	MONDO
-    ACVR1	ENST00000434821	protein_coding	6/11	PF08515	Transforming growth factor beta type I GS-motif	probably_damaging	0.999	missense_variant	cGc/cAc	R206H	fibrodysplasia ossificans progressiva MONDO:0007606
-    ```
+`Equivalency Tier` (1–5) ranks how equivalent the two variants are, from Tier 1 (identical change at the aligned residue) to Tier 5 (different consequence), and `Tier Basis` says what it rests on. The `... Match` columns are the evidence: `true`, `false`, or `null` where a criterion does not apply to the variant's `Scoring Class` (Coding or Splice/Intronic). `Aligned Position` is the residue that aligns with the submitted variant's residue in a protein alignment of the two transcripts, and `Local Alignment Identity` the share of identical residues within 10 residues either side. `Disease Match` (human queries) is `true` when the allele models one of the human variant's conditions. `Best Tier` is the variant's best tier on a protein-coding transcript; `Total Score` is kept for older tools and is superseded by the tier. The [User Guide](docs/USER_GUIDE.md#4-how-variant-equivalence-is-scored) defines each criterion and tier.
 
-3. Output gene table: Provides information on the given orthologous variant on a gene level.
+Example (ACVR1 R206H against Acvr1<sup>tm1Emsh</sup>):
 
-    ```
-    Gene Symbol	Description	Biotype	Chromosome	Start	End	Strand	Ensembl_ID	Accession
-    Acvr1	activin A receptor%2C type 1	protein_coding	2	58278656	58457169	-	ENSMUSG00000026836	MGI:87911
-    ```
+```
+Allele Symbol  Transcript ID       Scoring Class  Equivalency Tier  Biotype  Consequence  AA    AA Position  Domain  Aligned Position  Local Alignment Identity  Disease Match
+Acvr1tm1Emsh   ENSMUST00000056376  Coding         1                 true     true         true  true         true    206               1.0                       true
+```
 
-4. Output variant table: Provides information on the given orthologous variant on a transcript level.
+### Phenotype score columns
 
-    ```
-    Gene Symbol	AlleleID	AlleleSymbol	Transcript ID	Biotype	Exon Rank	Pfam Domain ID	Pfam Domain Name	Molecular Consequence	Sequence Change	Amino Acids	Associated Diseases	MONDO
-    Acvr1	MGI:6140231	Acvr1tm1Glh	ENSMUST00000056376	protein_coding	6/11	PF08515	Transforming growth factor beta type I GS-motif	missense_variant	cGC/cAT	R206H	fibrodysplasia ossificans progressiva	MONDO:0007606
-    Acvr1	MGI:6140231	Acvr1tm1Glh	ENSMUST00000090935	protein_coding	8/13	PF08515	Transforming growth factor beta type I GS-motif	missense_variant	cGC/cAT	R206H	fibrodysplasia ossificans progressiva	MONDO:0007606
-    Acvr1	MGI:6140231	Acvr1tm1Glh	ENSMUST00000112599	protein_coding	5/10	PF08515	Transforming growth factor beta type I GS-motif	missense_variant	cGC/cAT	R206H	fibrodysplasia ossificans progressiva	MONDO:0007606
-    Acvr1	MGI:6140231	Acvr1tm1Glh	ENSMUST00000112601	protein_coding	7/12	PF08515	Transforming growth factor beta type I GS-motif	missense_variant	cGC/cAT	R206H	fibrodysplasia ossificans progressiva	MONDO:0007606
-    ...
-    ```
+Phenotype similarity asks how much of a mouse phenotype a human reference accounts for. Each mouse (MP) term is translated to HPO through curated SSSOM mappings, weighted by mapping type, and matched to the closest human term by semantic similarity; the score is the weighted share, from 0 to 1. It is asymmetric: human terms with no mouse counterpart do not lower it.
 
-5. Output score table: Boolean match values for each mouse transcript
+| Column | Meaning |
+|---|---|
+| `Phenotype Score (variant)` | Human queries: the allele's phenotypes against the HPO annotations of each of the human variant's diseases, keeping the best |
+| `Matched Disease(s)` | The disease(s) giving that score; tied diseases are joined by `;` |
+| `Phenotype Score (gene)` | Human queries: the allele's phenotypes against all HPO terms of the human gene. Mouse queries: the phenotypes of every MGI allele of the mouse gene, pooled, against all HPO terms of the human homolog |
+| `MP Terms Mapped`, `MP Terms Total` | How many of the scored MP terms have an HPO translation, of all of them; a low ratio means much of the mouse phenotype cannot be compared |
+| `Alleles Pooled`, `Alleles Total`, `Human HP Terms` | Mouse queries: alleles with phenotypes, of all the gene's alleles, and the size of the human reference |
+| `Variant Mapping`, `Gene Mapping` | The term-by-term breakdown behind each score |
 
-    ```
-    Allele ID	Allele Symbol	Transcript ID	Biotype Match	Consequence Match	AA Match	AA Position Match	Exon Match	Domain Match	Disease Match	total_score
-    MGI:6140231	Acvr1tm1Glh	ENSMUST00000056376	true	true	true	true	true	true	true	100
-    MGI:6140231	Acvr1tm1Glh	ENSMUST00000090935	true	true	true	true	false	true	true	85
-    MGI:6140231	Acvr1tm1Glh	ENSMUST00000112599	true	true	true	true	false	true	true	85
-    MGI:6140231	Acvr1tm1Glh	ENSMUST00000112601	true	true	true	true	false	true	true	85
-    ...
-    ```
+An empty score means no comparison was possible (no MP term translates, or the human side has no HPO annotations); it is not a score of zero. Section 5 of the [User Guide](docs/USER_GUIDE.md#5-how-phenotype-similarity-is-scored) describes the scoring in full.
 
-6. Output phenotype table: Provides detailed phenotype information on all alleles in gene.
-
-    ```
-    Gene Symbol	AlleleID	AlleleSymbol	Allele Symbol	Phenotypes
-    Acvr1	MGI:6140231	Acvr1tm1Glh	Acvr1	MP:0005390,skeleton phenotype
-    Acvr1	MGI:1857711	Acvr1tm1Enl	Acvr1	MP:0001672,abnormal embryo development,MP:0001675,abnormal ectoderm development,MP:0001683,absent mesoderm,MP:0001695,abnormal gastrulation,MP:0001698,decreased embryo size,MP:0001710,absent amniotic folds,MP:0002230,abnormal primitive streak formation,MP:0003087,absent allantois,MP:0005030,absent amnion,MP:0009593,absent chorion,MP:0011098,embryonic lethality during organogenesis, complete penetrance,MP:0011186,abnormal visceral endoderm morphology,MP:0011190,thick embryonic epiblast
-    ...
-    ```
-
-All outputs are temporarily written to corresponding CSV files in the app/results directory. They are downloadable as a complete JSON on the web app.
+Each search also writes its main tables as CSV files to `app/results`, overwritten by the next search.

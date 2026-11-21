@@ -182,13 +182,6 @@ def hvar_query(variants, assembly='GRCh38'):
     gene_df.to_csv('app/results/hum_gene_df.csv', index=False)
     protein_df.to_csv('app/results/hum_protein_df.csv', index=False)
 
-    # Print resulting tables
-    # print(gene_df)
-    # print('----------')
-    # print(protein_df)
-    # print('----------')
-    # print(input_gene_df)
-    # print('----------')
     e = time.time()
 
     print(f'Human Time: {e-s}')
@@ -303,12 +296,6 @@ def mvar_fetch(input_gene_df, assembly='GRCm39'):
     mouse_prt_df.to_csv('app/results/mouse_protein_df.csv', index=False)
     phenotype_df.to_csv('app/results/mouse_phenotype_df.csv', index=False)
     gene_input_df.to_csv('app/results/gene_input_df.csv', index=False)
-
-    # Print resulting tables
-    # print(mouse_gene_df)
-    # print('----------')
-    # print(mouse_prt_df)
-    # print('----------')
 
     e = time.time()
     print(f'Mouse Time: {e-s}')
@@ -673,12 +660,6 @@ def mvar_query(variants, assembly='GRCm39'):
     gene_df.to_csv('app/results/mouse_gene_df.csv', index=False)
     protein_df.to_csv('app/results/mouse_protein_df.csv', index=False)
 
-    # # Print resulting tables
-    # print(gene_df)
-    # print('----------')
-    # print(protein_df)
-    # print('----------')
-
     e = time.time()
     print(f'Mouse Time: {e-s}')
 
@@ -741,13 +722,6 @@ def hvar_fetch(mouse_prt_df, input_mapping_df, assembly='GRCh38'):
     hum_protein_df.to_csv('app/results/hum_protein_df.csv', index=False)
     phenotype_df.to_csv('app/results/hum_phenotype_df.csv', index=False)
     gene_input_df.to_csv('app/results/gene_input_df.csv', index=False)
-
-    # # Print resulting tables
-    # print(hum_gene_df)
-    # print('----------')
-    # print(hum_protein_df)
-    # print('----------')
-
 
     e = time.time()
 
