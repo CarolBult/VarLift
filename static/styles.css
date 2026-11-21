@@ -1295,3 +1295,16 @@ pre.alignText {
     margin: 0 4px;
     color: #8a96a8;
 }
+
+/* Scoring table: tier chips and criterion circles */
+.tierChip { display: inline-block; border-radius: 4px; padding: 1px 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.critMark { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; box-sizing: border-box; }
+.critYes { background: #1f2937; }
+.critNo { border: 1.5px solid #4b5563; background: #fff; }
+.critNa { width: 11px; height: 0; border-radius: 0; border-top: 1.5px solid #6b7280; }
+#scoresTable td:has(> .critMark) { text-align: center; }
+.criteriaKey { font-size: 13px; color: #4b5563; margin: 0 0 6px; }
+.criteriaKey .critMark { margin: 0 4px 0 12px; }
+.criteriaKey .critMark:first-child { margin-left: 0; }
+.criteriaTiers { margin-left: 20px; }
+.visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

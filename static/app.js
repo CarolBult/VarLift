@@ -327,6 +327,7 @@ function renderTables(name, gene) {
 
         <div class='tableWrapper'>
             ${infoHeading('scoringInfo', 'Variant Equivalency Scoring', INFO.scoring(org))}
+            ${criteriaKey()}
             ${jsonToHTMLTable(sortedScores, "scoresTable")}
         </div>
 
@@ -859,6 +860,25 @@ function overviewView(data, targets, qChange, variantLabel, clickedTx, gene, que
             <span class="ovKeyMark ovOff"></span> variant residue elsewhere.
             Coloured strips beneath each bar: Pfam domains, placed by the alignment on ${q.toLowerCase()} numbering.
             Hover over a bar or strip for its residue numbers.</p>`;
+}
+
+
+// Scoring table marks: tier colours (Tier 1 darkest) and criterion circles
+const TIER_COLORS = { 1: '#1e3a5f', 2: '#33639c', 3: '#5b8bc6', 4: '#8cafdb', 5: '#b4c8e4' };
+
+function tierChip(tier) {
+    return `<span class="tierChip" style="background:${TIER_COLORS[tier] || '#94a3b8'};color:${tier >= 4 ? '#1f2937' : '#fff'}">Tier ${escapeText(tier)}</span>`;
+}
+
+// Filled = match, open = no match, dash = not applicable; the word stays for screen readers and search
+function criterionMark(value) {
+    const [cls, word] = value === true ? ['critYes', 'match'] : value === false ? ['critNo', 'no match'] : ['critNa', 'not applicable'];
+    return `<span class="critMark ${cls}" title="${word}"></span><span class="visuallyHidden">${word}</span>`;
+}
+
+function criteriaKey() {
+    return `<p class="criteriaKey">${criterionMark(true)} match ${criterionMark(false)} no match ${criterionMark(null)} not applicable
+        <span class="criteriaTiers">${[1, 2, 3, 4, 5].map(tierChip).join(' ')}</span></p>`;
 }
 
 
@@ -1483,7 +1503,7 @@ const INFO = {
                 <dd>Tier 1 is the most equivalent. The line under the tier says what it rests on. Transcripts marked
                     &ldquo;not protein-coding&rdquo; (for example, nonsense-mediated decay) are shown but don't set the ${human ? 'allele' : 'variant'}'s rank.</dd>
                 <dt>Match columns</dt>
-                <dd><code>true</code> or <code>false</code> for each criterion, the evidence behind the tier. N/A means the criterion
+                <dd>A filled circle (match) or open circle (no match) for each criterion, the evidence behind the tier. A dash means the criterion
                     does not apply or neither variant has a value. Columns that apply to no row are hidden.
                     <ul>
                         <li><b>Biotype Match</b>: both transcripts have the same biotype.</li>
@@ -1787,13 +1807,13 @@ function formatCell(row, col, tableId, org) {
 
     // The tier with what it rests on; NMD and non-coding transcripts don't set the allele's tier
     if (col === 'Equivalency Tier' && tableId === 'scoresTable' && value !== null && value !== '') {
-        value = `<div class="tierValue">Tier ${value}</div><div class="tierBasis">${escapeText(row['Tier Basis'] || '')}</div>`
+        value = `<div class="tierValue">${tierChip(value)}</div><div class="tierBasis">${escapeText(row['Tier Basis'] || '')}</div>`
             + (row['Counts Toward Tier'] === false ? '<div class="tierNote">not protein-coding; not used for the allele\'s tier</div>' : '');
     }
 
     // Criteria that don't apply to the variant's scoring class
-    if (tableId === 'scoresTable' && col.endsWith('Match') && value === null) {
-        value = 'N/A';
+    if (tableId === 'scoresTable' && col.endsWith('Match')) {
+        value = criterionMark(value);
     }
 
     // Add linking for PFAM domains
