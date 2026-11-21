@@ -115,20 +115,27 @@ The web page also offers some of these as clickable examples above the search fi
 
 ### Local Python Use
 
-The pipeline can also be run from Python, from the repository root with the conda environment active. These are the steps the web app runs (see `run_pipeline` in `server.py`).
+The pipeline can also be run from Python, from the repository root with the conda environment active. These are the analysis steps the web app runs (see `run_pipeline` in `server.py`, which also orders the phenotype table for display).
 
 1. Human variants to equivalent mouse alleles:
 
     ```python
     from app.processing_util import process_batch_query
-    from app.main_util import hvar_query, mvar_fetch, hvar_query_score
+    from app.main_util import hvar_query, mvar_fetch, hvar_query_score, phenotype_similarity
 
     # One variant per line; process_batch_query parses them (a tab and a label may follow each variant)
-    variants = process_batch_query('2:157774114-157774114:C/T\n12:112477719-112477719:A/G').drop(columns='Label')
+    variants = process_batch_query('2:157774114-157774114:C/T\n12:112477719-112477719:A/G')
+    if variants.empty:
+        raise ValueError('No variants recognized; use chromosome:start-end:ref/alt')
+    variants = variants.drop(columns='Label')
 
     query_gene_df, query_prt_df, input_genes, unevaluated_df = hvar_query(variants)
     output_gene_df, output_prt_df, output_phenotype_df, input_genes, allele_coverage_df = mvar_fetch(input_genes)
     score_df = hvar_query_score(query_prt_df, output_prt_df, input_genes, mouse_phenotype_df=output_phenotype_df)
+
+    # One row per evaluated allele: variant and gene phenotype scores, with the term mapping behind each
+    phenotype_similarity_df = phenotype_similarity(query_prt_df, score_df[['Input Name', 'AlleleID']],
+                                                   output_phenotype_df, detail=True)
     ```
 
 2. Mouse variants to candidate human variants:
@@ -137,7 +144,10 @@ The pipeline can also be run from Python, from the repository root with the cond
     from app.processing_util import process_batch_query
     from app.main_util import mvar_query, hvar_fetch, mvar_query_score, gene_phenotype_similarity
 
-    variants = process_batch_query('X:73080081-73080081:G/A').drop(columns='Label')
+    variants = process_batch_query('X:73080081-73080081:G/A')
+    if variants.empty:
+        raise ValueError('No variants recognized; use chromosome:start-end:ref/alt')
+    variants = variants.drop(columns='Label')
 
     query_gene_df, query_prt_df, input_genes, unevaluated_df, allele_coverage_df = mvar_query(variants)
     output_gene_df, output_prt_df, output_phenotype_df, input_genes = hvar_fetch(query_prt_df, input_genes)

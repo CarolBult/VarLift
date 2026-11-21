@@ -200,7 +200,8 @@ def apptainer_vep(species, query=True, input_file='input.vcf', output_file='outp
         cmd += ['--pick',
                 '--pick_order', 'canonical,length']
 
-    subprocess.run(cmd, check=True)
+    # VEP's error output is kept so a failure can be logged with its cause
+    subprocess.run(cmd, check=True, stderr=subprocess.PIPE, text=True)
 
 
 def parse_vep_json(input_file=vep_output_file, keep_intergenic=False):
@@ -382,8 +383,15 @@ def run_vep(variants, species, query=True, coding_only=True):
             vep_df = parse_vep_json(run_dir / 'output.json', keep_intergenic=not coding_only)
             vep_df = add_intron_offsets(vep_df, species)
 
-        except:
-            logging.error('VEP Request Failed')
+        except Exception as error:
+            # The search goes on with no VEP results, so log why: VEP's own error output, or
+            # the exception (e.g. apptainer not installed, or the image or cache not found)
+            if isinstance(error, subprocess.CalledProcessError):
+                stderr = (error.stderr or '').strip()
+                logging.error(f'VEP failed for {species} (exit code {error.returncode}): '
+                              f'{stderr[-2000:] or "no error output"}')
+            else:
+                logging.exception(f'VEP request failed for {species}')
             vep_df = pd.DataFrame(columns=['gene_symbol','transcript_id','amino_acids','protein_start',
                                            'consequence_terms','exon','codons','impact','biotype',
                                            'Domain','Submission','Name'])
