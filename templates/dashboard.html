@@ -35,6 +35,25 @@
 
     <h1>VarLift: Human-Mouse Variant Equivalence Assessment</h1>
 
+    <!-- What the tool does; the icon explains "equivalent" on hover or keyboard focus -->
+    <p class="siteIntro">Enter human sequence variants to find equivalent mouse variants and their curated phenotype and disease
+        annotations from the Mouse Genome Database.<br>Enter mouse sequence variants to find equivalent human variants in
+        NCBI's ClinVar database.
+        <span class="equivInfo">
+            <span class="equivIcon" tabindex="0" role="button" aria-label="What does equivalent mean?" aria-describedby="equivTip">i</span>
+            <span class="equivTip" id="equivTip" role="tooltip">
+                <strong>What &ldquo;equivalent&rdquo; means.</strong> Equivalent variants change the human gene and its
+                mouse ortholog in the same way. VarLift aligns the two proteins and compares the variants on the kind of
+                change (for example, missense or stop gained), whether the affected residues line up in the alignment
+                (even when they are numbered differently), the amino-acid change, and the protein domain. Splice-site and
+                intronic variants are compared by intron and by distance from the exon boundary.<br><br>
+                Each pair gets an Equivalency Tier, from Tier 1 (the identical change at the equivalent position) to
+                Tier 5 (a different kind of change). Equivalence compares annotations; it does not predict whether a
+                variant causes disease.
+            </span>
+        </span>
+    </p>
+
     <div class="topRow">
 
     <div class="searchContainer">

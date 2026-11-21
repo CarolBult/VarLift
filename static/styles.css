@@ -1308,3 +1308,91 @@ pre.alignText {
 .criteriaKey .critMark:first-child { margin-left: 0; }
 .criteriaTiers { margin-left: 20px; }
 .visuallyHidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* What the tool does, under the page title, with a hover explanation of "equivalent" */
+.siteIntro {
+    max-width: 1120px;
+    margin: -6px auto 18px;
+    padding: 0 16px;
+    text-align: center;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #333;
+}
+
+.equivInfo {
+    position: relative;
+    display: inline-block;
+}
+
+.equivIcon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-left: 4px;
+    border: 1.5px solid #587da1;
+    border-radius: 50%;
+    background: #fff;
+    color: #587da1;
+    font: italic 700 13px Georgia, serif;
+    vertical-align: middle;
+    cursor: help;
+}
+
+.equivInfo:hover .equivIcon,
+.equivIcon:focus-visible {
+    background: #587da1;
+    color: #fff;
+    outline: none;
+}
+
+.equivTip {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 8px);
+    right: -12px;
+    width: min(440px, calc(100vw - 32px));
+    padding: 12px 14px;
+    border: 1.5px solid #587da1;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    color: #333;
+    font-size: 14px;
+    line-height: 1.45;
+    text-align: left;
+    transition: opacity 0.15s ease-in-out;
+}
+
+/* Shown on hover over the icon or the tip itself, and on keyboard focus */
+.equivInfo:hover .equivTip,
+.equivInfo:focus-within .equivTip {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Keeps the tip open while the pointer crosses the gap from the icon to it */
+.equivTip::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 0;
+    right: 0;
+    height: 10px;
+}
+
+/* Narrow screens: centre the tip in the window so it isn't cut off */
+@media (max-width: 700px) {
+    .equivTip {
+        position: fixed;
+        top: 50%;
+        left: 16px;
+        right: 16px;
+        width: auto;
+        transform: translateY(-50%);
+    }
+}
